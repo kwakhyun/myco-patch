@@ -1,0 +1,35 @@
+name: python-timezone-boundary
+version: 0.1.0
+language: python
+description: Detects naive datetime and date-boundary risks in Python projects.
+risk_type: timezone_boundary
+triggers:
+  path_keywords:
+    - billing
+    - invoice
+    - subscription
+    - schedule
+    - expiry
+    - expiration
+    - deadline
+    - renewal
+    - payment
+    - report
+  code_patterns:
+    - datetime.now
+    - datetime.utcnow
+    - date.today
+probe:
+  type: pytest
+  strategy: boundary_dates
+budget:
+  max_input_tokens: 6000
+  max_output_tokens: 1200
+  max_runtime_seconds: 60
+safety:
+  network: deny
+  write_paths:
+    - .myco/probes/generated_tests
+    - .myco/reports
+    - .myco/memory
+

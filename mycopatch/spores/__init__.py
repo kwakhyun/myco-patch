@@ -1,0 +1,2 @@
+"""Built-in MycoPatch spores."""
+
