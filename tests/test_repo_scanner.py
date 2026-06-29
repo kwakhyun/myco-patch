@@ -36,3 +36,22 @@ def test_scanner_detects_datetime_patterns_and_tests(tmp_path):
     assert not billing.is_test_file
     assert test_file.is_test_file
 
+
+def test_scanner_detects_replace_tzinfo_and_naive_comparison(tmp_path):
+    (tmp_path / "reports.py").write_text(
+        "from datetime import datetime, timezone\n"
+        "deadline = datetime(2026, 1, 1)\n"
+        "current = datetime.now()\n"
+        "normalized = deadline.replace(tzinfo=timezone.utc)\n"
+        "expired = current > deadline\n",
+        encoding="utf-8",
+    )
+
+    result = scan_repository(tmp_path)
+    finding = result.python_files[0]
+
+    assert finding.uses_naive_datetime_construction
+    assert finding.uses_datetime_now
+    assert finding.uses_replace_tzinfo
+    assert finding.uses_timezone_naive_comparison
+    assert any(item.line_number == 5 and item.pattern == "timezone-naive comparison" for item in finding.datetime_evidence)

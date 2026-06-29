@@ -35,13 +35,23 @@ From the root of a Python repository:
 
 ```bash
 myco init
+myco init  # safe to run again; verifies the existing .myco layout
 myco scan
-myco hunt --budget 30000
+myco risks
+myco hunt --budget 30000 --mode safe
 myco report
 myco patch
 ```
 
-`myco hunt` uses deterministic offline heuristics. By default it generates a safe pytest probe and runs only that generated probe file.
+What to expect:
+
+- `myco init` creates `.myco/`, installs the built-in timezone spore, and is idempotent.
+- `myco scan` writes `.myco/reports/repo_weather.md` with detected Python files, tests, top risks, and offline cost accounting.
+- `myco risks` prints the top findings with score, confidence, nearby-test status, and first evidence line.
+- `myco hunt --budget 30000 --mode safe` uses deterministic offline heuristics. It generates a safe pytest risk-marker probe and runs only that generated probe file.
+- `myco hunt --budget 30000 --mode aggressive` may generate a failing probe when static evidence is clear. Aggressive probes are labeled, write an explanation markdown file beside the generated test, and still never modify application source files.
+- `myco report` summarizes memory events, probe outcomes, and the zero-dollar offline cost ledger.
+- `myco patch` does not automatically edit arbitrary source files. It writes recommendations only when reproducible probe failures have been recorded.
 
 ## The `.myco/` Directory
 
@@ -83,11 +93,13 @@ MycoPatch v0.1 blocks dangerous commands by default and allows only a narrow loc
 
 Generated probes do not import application code by default. They act as executable risk markers so the pipeline can be verified without hallucinating project-specific behavior.
 
+Aggressive probes are opt-in. They may intentionally fail while a risky static pattern remains, but they are written only under `.myco/probes/generated_tests/` and include a markdown explanation for human review.
+
 ## Current Limitations
 
 - Python + pytest only.
 - Timezone/date-boundary spore only.
-- Probe generation is heuristic and conservative.
+- Probe generation is heuristic. Safe mode is conservative; aggressive mode still uses static evidence only.
 - Patch generation is recommendation-only.
 - No LLM provider integrations yet.
 - No autonomous source-code modification.
@@ -95,9 +107,8 @@ Generated probes do not import application code by default. They act as executab
 ## Roadmap
 
 - v0.1: offline Python/pytest MVP.
-- v0.2: stronger probes and richer risk evidence.
+- v0.2: safe/aggressive probe modes, AST-backed datetime evidence, confidence scoring, and risk tables.
 - v0.3: LLM provider adapters behind auditable interfaces.
 - v0.4: guarded patch generation from reproducible failures.
 - v0.5: local model routing.
 - v1.0: spore marketplace and shared immune memory workflows.
-

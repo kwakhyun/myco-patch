@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.2.0"
 
 
 def utc_now() -> datetime:
@@ -19,6 +19,13 @@ class SerializableModel(BaseModel):
         return self.model_dump(mode="json")
 
 
+class EvidenceItem(SerializableModel):
+    line_number: int
+    pattern: str
+    snippet: str
+    kind: str
+
+
 class FileFinding(SerializableModel):
     path: str
     line_count: int
@@ -27,9 +34,12 @@ class FileFinding(SerializableModel):
     uses_datetime_utcnow: bool = False
     uses_date_today: bool = False
     uses_naive_datetime_construction: bool = False
+    uses_replace_tzinfo: bool = False
+    uses_timezone_naive_comparison: bool = False
     contains_timezone_keywords: bool = False
     is_test_file: bool = False
     evidence: list[str] = Field(default_factory=list)
+    datetime_evidence: list[EvidenceItem] = Field(default_factory=list)
 
 
 class RepoScanResult(SerializableModel):
@@ -53,7 +63,11 @@ class RiskFinding(SerializableModel):
     risk_type: str
     score: int
     evidence: list[str] = Field(default_factory=list)
+    evidence_items: list[EvidenceItem] = Field(default_factory=list)
     reason: str
+    confidence: Literal["low", "medium", "high"] = "low"
+    nearby_test_detected: bool = False
+    recommended_review_steps: list[str] = Field(default_factory=list)
 
 
 class SporeProbeSpec(SerializableModel):
@@ -99,6 +113,8 @@ class Probe(SerializableModel):
     evidence: list[str] = Field(default_factory=list)
     spore_name: str
     safe_default: bool = True
+    mode: Literal["safe", "aggressive"] = "safe"
+    explanation_path: str | None = None
 
 
 class ProbeResult(SerializableModel):
@@ -155,4 +171,3 @@ def relative_path(path: Path, root: Path) -> str:
         return path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         return path.as_posix()
-

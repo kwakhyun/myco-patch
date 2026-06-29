@@ -1,6 +1,7 @@
 # Safety
 
-MycoPatch v0.1 is local-first and offline. It does not call external APIs, start background services, run containers, or modify application source files.
+MycoPatch is local-first and offline. It does not call external APIs, start background services, run containers, or modify application source files.
+Version 0.2 keeps those boundaries while adding opt-in aggressive probes.
 
 ## Command Policy
 
@@ -22,6 +23,8 @@ The built-in spore declares `network: deny`. Future versions may add explicit ca
 
 Generated files live under `.myco/`. Memory and cost records are append-only JSONL. Reports are Markdown so maintainers can inspect evidence without specialized infrastructure.
 
+Aggressive probes are clearly labeled and may intentionally fail while a risky static pattern remains. They are written only under `.myco/probes/generated_tests/`, and each aggressive probe has a sibling Markdown explanation describing why it may fail and what a human should review.
+
 ## Future Capability Leases
 
 A future capability lease should answer:
@@ -31,4 +34,3 @@ A future capability lease should answer:
 - How long does the lease last?
 - What budget applies?
 - What audit record will be written?
-

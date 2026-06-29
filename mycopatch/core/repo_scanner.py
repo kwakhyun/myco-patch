@@ -6,6 +6,7 @@ from pathlib import Path
 
 from mycopatch.core.models import FileFinding, RepoScanResult, relative_path
 from mycopatch.core.paths import IGNORED_DIRS
+from mycopatch.core.python_datetime_analyzer import analyze_datetime_risks
 
 
 TIME_KEYWORDS = {
@@ -55,22 +56,27 @@ def scan_python_file(path: Path, repo_root: Path) -> FileFinding:
     except UnicodeDecodeError:
         text = ""
 
-    evidence = _collect_evidence(text)
+    datetime_evidence = analyze_datetime_risks(text)
+    evidence = _collect_evidence(text, datetime_evidence)
     lowered = f"{rel_path}\n{text}".lower()
     is_test = _is_test_file(path, repo_root)
     imports_datetime = _imports_datetime(text)
+    evidence_patterns = {item.pattern for item in datetime_evidence}
 
     return FileFinding(
         path=rel_path,
         line_count=text.count("\n") + (1 if text else 0),
         imports_datetime=imports_datetime,
-        uses_datetime_now="datetime.now" in text,
-        uses_datetime_utcnow="datetime.utcnow" in text,
-        uses_date_today="date.today" in text,
-        uses_naive_datetime_construction=_uses_naive_datetime_construction(text),
+        uses_datetime_now="datetime.now()" in evidence_patterns,
+        uses_datetime_utcnow="datetime.utcnow()" in evidence_patterns,
+        uses_date_today="date.today()" in evidence_patterns,
+        uses_naive_datetime_construction="datetime(...)" in evidence_patterns,
+        uses_replace_tzinfo="replace(tzinfo=...)" in evidence_patterns,
+        uses_timezone_naive_comparison="timezone-naive comparison" in evidence_patterns,
         contains_timezone_keywords=any(keyword in lowered for keyword in TIME_KEYWORDS),
         is_test_file=is_test,
         evidence=evidence,
+        datetime_evidence=datetime_evidence,
     )
 
 
@@ -119,42 +125,23 @@ def _imports_datetime(text: str) -> bool:
     return False
 
 
-def _uses_naive_datetime_construction(text: str) -> bool:
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
-        return "datetime(" in text
-
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        name = _call_name(node.func)
-        if name not in {"datetime", "datetime.datetime"}:
-            continue
-        if not any(keyword.arg == "tzinfo" for keyword in node.keywords):
-            return True
-    return False
-
-
-def _call_name(node: ast.AST) -> str:
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        parent = _call_name(node.value)
-        return f"{parent}.{node.attr}" if parent else node.attr
-    return ""
-
-
-def _collect_evidence(text: str) -> list[str]:
+def _collect_evidence(text: str, datetime_evidence: list) -> list[str]:
     snippets: list[str] = []
-    patterns = ["datetime.now", "datetime.utcnow", "date.today", "datetime("]
+    for item in datetime_evidence:
+        snippets.append(f"L{item.line_number}: {item.snippet}")
+
     for lineno, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         lowered = stripped.lower()
-        if any(pattern in stripped for pattern in patterns) or any(
-            keyword in lowered for keyword in TIME_KEYWORDS
-        ):
+        if any(keyword in lowered for keyword in TIME_KEYWORDS):
             snippets.append(f"L{lineno}: {stripped[:180]}")
-        if len(snippets) >= 8:
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for snippet in snippets:
+        if snippet not in seen:
+            deduped.append(snippet)
+            seen.add(snippet)
+        if len(deduped) >= 12:
             break
-    return snippets
+    return deduped

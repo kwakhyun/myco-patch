@@ -21,7 +21,8 @@ def write_repo_weather(
         "# Repo Weather Report",
         "",
         f"- Timestamp: {utc_now().isoformat()}",
-        f"- Repo path: {scan.repo_root}",
+        "- Repo path: .",
+        f"- Repo name: {Path(scan.repo_root).name}",
         f"- Python files: {scan.python_file_count}",
         f"- Test files: {scan.test_file_count}",
         f"- Framework hints: {', '.join(scan.framework_hints) if scan.framework_hints else 'none detected'}",
@@ -37,11 +38,15 @@ def write_repo_weather(
                     "",
                     f"- Risk type: {risk.risk_type}",
                     f"- Score: {risk.score}",
+                    f"- Confidence: {risk.confidence}",
+                    f"- Nearby test detected: {'yes' if risk.nearby_test_detected else 'no'}",
                     f"- Reason: {risk.reason}",
                     "- Evidence:",
                 ]
             )
             lines.extend(f"  - `{item}`" for item in risk.evidence[:6])
+            lines.append("- Recommended human review steps:")
+            lines.extend(f"  - {step}" for step in risk.recommended_review_steps[:5])
             lines.append("")
     else:
         lines.extend(["No clear timezone/date-boundary risks detected.", ""])
@@ -57,7 +62,7 @@ def write_repo_weather(
             "",
             "## Recommended Next Command",
             "",
-            "`myco hunt --budget 30000`",
+            "`myco risks` to inspect findings, then `myco hunt --budget 30000 --mode safe` or `myco hunt --budget 30000 --mode aggressive`.",
             "",
         ]
     )
@@ -104,4 +109,3 @@ def build_console_report(repo_root: Path | str) -> dict[str, object]:
         + counts.get("probe_blocked", 0),
         "cost": costs,
     }
-

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 
 import typer
@@ -28,10 +29,20 @@ app.add_typer(spores_app, name="spores")
 console = Console()
 
 
+class HuntMode(str, Enum):
+    safe = "safe"
+    aggressive = "aggressive"
+
+
 @app.command()
 def init() -> None:
     """Create the .myco directory structure and install built-in spores."""
+    already_initialized = is_initialized(Path.cwd())
     paths = ensure_myco_layout(Path.cwd())
+    if already_initialized:
+        console.print(f"[green]MycoPatch already initialized; verified layout at[/green] {paths.myco}")
+        return
+
     append_memory_event(
         paths.repo_root,
         "repo_initialized",
@@ -47,7 +58,6 @@ def scan() -> None:
     root = Path.cwd().resolve()
     scan_result = scan_repository(root)
     risks = map_timezone_risks(scan_result)
-    report_path = write_repo_weather(root, scan_result, risks)
     append_memory_event(
         root,
         "scan_completed",
@@ -62,9 +72,10 @@ def scan() -> None:
     record_cost_event(
         root,
         input_text=" ".join(finding.path for finding in scan_result.python_files),
-        output_text=report_path.read_text(encoding="utf-8"),
+        output_text=f"repo weather report with {len(risks)} risk(s)",
         notes="repo scan and weather report",
     )
+    report_path = write_repo_weather(root, scan_result, risks)
     console.print(
         f"[green]Scan complete.[/green] Python files: {scan_result.python_file_count}, "
         f"tests: {scan_result.test_file_count}, risks: {len(risks)}"
@@ -76,10 +87,12 @@ def scan() -> None:
 def hunt(
     budget: int = typer.Option(30000, help="Estimated token budget for this hunt."),
     run: bool = typer.Option(True, "--run/--no-run", help="Run generated probes with pytest."),
+    mode: HuntMode = typer.Option(HuntMode.safe, help="Probe generation mode: safe or aggressive."),
 ) -> None:
-    """Generate and optionally verify safe probes from loaded spores."""
+    """Generate and optionally verify probes from loaded spores."""
     _require_initialized()
     root = Path.cwd().resolve()
+    mode_value = mode.value
     scan_result = scan_repository(root)
     risks = map_timezone_risks(scan_result)
     spores = load_spores(root)
@@ -97,14 +110,14 @@ def hunt(
         return
 
     top_risk = risks[0]
-    probe = generate_timezone_probe(root, top_risk, spore)
+    probe = generate_timezone_probe(root, top_risk, spore, mode=mode_value)
     append_memory_event(root, "probe_generated", {"probe": probe.json_dict(), "risk": top_risk.json_dict()})
     record_cost_event(
         root,
         input_text=scan_result.model_dump_json() + top_risk.model_dump_json(),
         output_text=probe.model_dump_json(),
         budget_limit=budget,
-        notes="offline heuristic probe generation",
+        notes=f"offline heuristic {mode_value} probe generation",
     )
 
     if not run:
@@ -122,8 +135,41 @@ def hunt(
         console.print(f"[green]Probe passed:[/green] {probe.path}")
     elif result.status == "failed":
         console.print(f"[red]Probe failed reproducibly:[/red] {probe.path}")
+        if probe.mode == "aggressive" and probe.explanation_path:
+            console.print(f"Aggressive probe report: {probe.explanation_path}")
     else:
         console.print(f"[yellow]Probe {result.status}:[/yellow] {probe.path}")
+
+
+@app.command()
+def risks(
+    limit: int = typer.Option(10, min=1, help="Maximum number of risk findings to show."),
+) -> None:
+    """Print top risk findings without generating probes."""
+    _require_initialized()
+    root = Path.cwd().resolve()
+    scan_result = scan_repository(root)
+    findings = map_timezone_risks(scan_result)
+
+    if not findings:
+        console.print("[green]No clear timezone/date-boundary risks detected.[/green]")
+        return
+
+    table = Table(title="MycoPatch Top Risks")
+    table.add_column("Score", justify="right")
+    table.add_column("Confidence")
+    table.add_column("Nearby Test")
+    table.add_column("File")
+    table.add_column("Evidence")
+    for risk in findings[:limit]:
+        table.add_row(
+            str(risk.score),
+            risk.confidence,
+            "yes" if risk.nearby_test_detected else "no",
+            risk.file_path,
+            risk.evidence[0] if risk.evidence else "no line-level evidence",
+        )
+    console.print(table)
 
 
 @app.command()
@@ -147,7 +193,10 @@ def report() -> None:
     table.add_row("Estimated output tokens", str(cost["estimated_output_tokens"]))
     table.add_row("Estimated cost USD", f"{cost['estimated_cost_usd']:.4f}")
     console.print(table)
-    console.print("Suggested next action: run `myco hunt --budget 30000` or inspect `.myco/reports/`.")
+    console.print(
+        "Suggested next action: run `myco risks`, then `myco hunt --budget 30000 --mode safe` "
+        "or inspect `.myco/reports/`."
+    )
 
 
 @app.command()
@@ -193,7 +242,11 @@ def doctor() -> None:
 
 def _require_initialized() -> None:
     if not is_initialized(Path.cwd()):
-        console.print("[red]MycoPatch is not initialized.[/red] Run `myco init` first.")
+        console.print(
+            "[red]MycoPatch is not initialized in the current directory.[/red]\n"
+            f"Current directory: {Path.cwd()}\n"
+            "Run `myco init` from the repository root, then retry this command."
+        )
         raise typer.Exit(code=1)
 
 
@@ -205,4 +258,3 @@ def _pytest_available() -> bool:
 
 if __name__ == "__main__":
     app()
-

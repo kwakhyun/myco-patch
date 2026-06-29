@@ -16,6 +16,10 @@ def test_policy_blocks_dangerous_commands():
         ["cat", ".env"],
         ["docker", "run", "--privileged", "image"],
         ["aws", "s3", "ls"],
+        ["env", "|", "grep", "TOKEN"],
+        ["printenv"],
+        ["powershell", "Invoke-WebRequest", "https://example.com"],
+        ["kubectl", "get", "secrets"],
     ]
 
     for command in commands:

@@ -12,8 +12,9 @@
 
 ## v0.2 Stronger Probes
 
-- Add richer static evidence.
-- Generate project-aware probes when safe contracts are discoverable.
+- Add AST-backed datetime evidence with line numbers.
+- Add safe and aggressive probe modes.
+- Add confidence scoring and `myco risks`.
 - Improve test proximity detection.
 - Add more built-in Python spores.
 
@@ -42,4 +43,3 @@
 - Sign and verify spores.
 - Support project-level trust policies.
 - Build community-maintained immune memory workflows.
-

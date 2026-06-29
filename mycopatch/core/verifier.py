@@ -43,9 +43,25 @@ def verify_probe(repo_root: Path | str, probe: Probe, timeout_seconds: int = 60)
         probe_path=probe.path,
         status=status,
         return_code=result.return_code,
-        stdout=result.stdout,
-        stderr=result.stderr,
+        stdout=_sanitize_output(result.stdout, root),
+        stderr=_sanitize_output(result.stderr, root),
         duration_seconds=result.duration_seconds,
         evidence=[f"pytest return code: {result.return_code}"],
     )
 
+
+def _sanitize_output(text: str, repo_root: Path) -> str:
+    if not text:
+        return text
+
+    replacements = {
+        repo_root.as_posix(),
+        str(repo_root),
+        repo_root.resolve().as_posix(),
+        str(repo_root.resolve()),
+    }
+    sanitized = text
+    for value in sorted(replacements, key=len, reverse=True):
+        if value:
+            sanitized = sanitized.replace(value, "<repo-root>")
+    return sanitized
