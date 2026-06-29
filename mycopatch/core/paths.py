@@ -42,6 +42,22 @@ Default boundaries:
 - Patches are recommendations unless a maintainer explicitly applies them.
 """
 
+DEFAULT_CONFIG = """# MycoPatch configuration
+
+# Offline heuristic mode is the default. External model providers are never
+# called unless allow_network_for_model_provider is explicitly set to true.
+default_provider = "offline"
+model_name = "offline-heuristic"
+max_input_tokens = 6000
+max_output_tokens = 1200
+max_cost_usd = 0.0
+allow_network_for_model_provider = false
+
+# Optional for provider interfaces. Leave blank to keep offline-only behavior.
+provider_base_url = ""
+api_key_env = "OPENAI_API_KEY"
+"""
+
 
 @dataclass(frozen=True)
 class MycoPaths:
@@ -70,6 +86,10 @@ class MycoPaths:
     @property
     def reports(self) -> Path:
         return self.myco / "reports"
+
+    @property
+    def config(self) -> Path:
+        return self.myco / "config.toml"
 
     @property
     def constitution(self) -> Path:
@@ -113,6 +133,8 @@ def ensure_myco_layout(repo_root: Path | str | None = None) -> MycoPaths:
 
     if not paths.constitution.exists():
         paths.constitution.write_text(DEFAULT_CONSTITUTION, encoding="utf-8")
+    if not paths.config.exists():
+        paths.config.write_text(DEFAULT_CONFIG, encoding="utf-8")
 
     for filename in MEMORY_FILES:
         (paths.memory / filename).touch(exist_ok=True)
@@ -133,4 +155,3 @@ def copy_builtin_spores(paths: MycoPaths) -> list[Path]:
                     shutil.copyfile(spore_path, target)
                 copied.append(target)
     return copied
-

@@ -21,6 +21,7 @@ from mycopatch.core.reporter import (
 from mycopatch.core.risk_mapper import map_timezone_risks
 from mycopatch.core.spore_loader import load_spores
 from mycopatch.core.verifier import verify_probe
+from mycopatch.providers.service import invoke_model_provider
 
 
 app = typer.Typer(help="MycoPatch: an offline immune system for codebases.")
@@ -110,8 +111,21 @@ def hunt(
         return
 
     top_risk = risks[0]
+    probe_ideas = invoke_model_provider(
+        root,
+        task="suggest_probe_ideas",
+        prompt=top_risk.model_dump_json(),
+    )
     probe = generate_timezone_probe(root, top_risk, spore, mode=mode_value)
-    append_memory_event(root, "probe_generated", {"probe": probe.json_dict(), "risk": top_risk.json_dict()})
+    append_memory_event(
+        root,
+        "probe_generated",
+        {
+            "probe": probe.json_dict(),
+            "risk": top_risk.json_dict(),
+            "provider_probe_ideas": probe_ideas.json_dict(),
+        },
+    )
     record_cost_event(
         root,
         input_text=scan_result.model_dump_json() + top_risk.model_dump_json(),

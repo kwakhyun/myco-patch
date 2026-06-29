@@ -20,10 +20,10 @@
 
 ## v0.3 LLM Provider Adapters
 
-- Add provider interfaces without binding memory to one model.
-- Keep deterministic context packs.
-- Track token and dollar budgets per generation.
-- Require evidence before generation.
+- Add advisory provider interfaces without binding memory to one model.
+- Keep offline heuristic mode as the default.
+- Track token and dollar budgets for every provider call.
+- Limit provider use to failure summaries, probe ideas, and patch recommendation text.
 
 ## v0.4 Patch Generation
 

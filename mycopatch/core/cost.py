@@ -14,17 +14,26 @@ def estimate_tokens(text: str) -> int:
 def record_cost_event(
     repo_root: Path | str,
     *,
+    event_type: str = "cost_recorded",
+    task: str | None = None,
+    provider_name: str | None = None,
+    model_name: str = "offline-heuristic",
     input_text: str = "",
     output_text: str = "",
+    estimated_cost_usd: float = 0.0,
     budget_limit: int | None = None,
     notes: str = "",
 ) -> CostEvent:
     paths = get_paths(repo_root)
     paths.reports.mkdir(parents=True, exist_ok=True)
     event = CostEvent(
+        event_type=event_type,
+        task=task,
+        provider_name=provider_name,
+        model_name=model_name,
         estimated_input_tokens=estimate_tokens(input_text),
         estimated_output_tokens=estimate_tokens(output_text),
-        estimated_cost_usd=0.0,
+        estimated_cost_usd=estimated_cost_usd,
         budget_limit=budget_limit,
         notes=notes,
     )
@@ -52,4 +61,3 @@ def summarize_cost(repo_root: Path | str) -> dict[str, float | int]:
         "estimated_output_tokens": sum(event.estimated_output_tokens for event in events),
         "estimated_cost_usd": sum(event.estimated_cost_usd for event in events),
     }
-

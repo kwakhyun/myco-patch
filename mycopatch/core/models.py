@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-SCHEMA_VERSION = "0.2.0"
+SCHEMA_VERSION = "0.3.0"
 
 
 def utc_now() -> datetime:
@@ -131,6 +131,8 @@ class ProbeResult(SerializableModel):
 
 class CostEvent(SerializableModel):
     event_type: str = "cost_recorded"
+    task: str | None = None
+    provider_name: str | None = None
     model_name: str = "offline-heuristic"
     estimated_input_tokens: int = 0
     estimated_output_tokens: int = 0
@@ -153,7 +155,41 @@ class PatchRecommendation(SerializableModel):
     evidence: list[str] = Field(default_factory=list)
     generated_probe_path: str
     suggested_manual_fix_strategy: str
+    failure_summary: str = ""
+    provider_name: str = "offline-heuristic"
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class ModelProviderConfig(SerializableModel):
+    default_provider: Literal["offline", "openai-compatible", "local-http"] = "offline"
+    model_name: str = "offline-heuristic"
+    max_input_tokens: int = 6000
+    max_output_tokens: int = 1200
+    max_cost_usd: float = 0.0
+    allow_network_for_model_provider: bool = False
+    provider_base_url: str = ""
+    api_key_env: str = "OPENAI_API_KEY"
+
+
+class ModelRequest(SerializableModel):
+    task: Literal[
+        "summarize_failure_logs",
+        "suggest_probe_ideas",
+        "draft_patch_recommendation",
+    ]
+    prompt: str
+    max_input_tokens: int
+    max_output_tokens: int
+
+
+class ModelResponse(SerializableModel):
+    text: str
+    provider_name: str
+    model_name: str
+    estimated_input_tokens: int = 0
+    estimated_output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    network_used: bool = False
 
 
 class CommandResult(SerializableModel):
