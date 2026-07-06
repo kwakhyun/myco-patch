@@ -19,6 +19,12 @@ IGNORED_DIRS = {
     ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".turbo",
+    "coverage",
+    "out",
 }
 
 MEMORY_FILES = [

@@ -20,3 +20,23 @@ def test_risk_mapper_detects_nested_nearby_test_file(tmp_path):
     assert risks[0].file_path == "package/module.py"
     assert risks[0].nearby_test_detected
     assert "nearby test file detected" in risks[0].reason
+
+
+def test_risk_mapper_detects_js_ts_nearby_test_file(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "billing.ts").write_text(
+        "export function deadline() {\n"
+        "  return new Date('2026-07-07')\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "billing.test.ts").write_text("test('deadline', () => {})\n", encoding="utf-8")
+
+    risks = map_timezone_risks(scan_repository(tmp_path))
+
+    assert risks[0].file_path == "src/billing.ts"
+    assert risks[0].language == "typescript"
+    assert risks[0].nearby_test_detected

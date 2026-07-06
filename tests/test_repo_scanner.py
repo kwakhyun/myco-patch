@@ -55,3 +55,31 @@ def test_scanner_detects_replace_tzinfo_and_naive_comparison(tmp_path):
     assert finding.uses_replace_tzinfo
     assert finding.uses_timezone_naive_comparison
     assert any(item.line_number == 5 and item.pattern == "timezone-naive comparison" for item in finding.datetime_evidence)
+
+
+def test_scanner_detects_js_ts_files_and_ignores_build_outputs(tmp_path):
+    (tmp_path / "billing.ts").write_text(
+        "export const due = new Date('2026-07-07')\n"
+        "export const renewed = Date.now()\n"
+        "export const month = due.getMonth()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "types.d.ts").write_text("declare const x: Date\n", encoding="utf-8")
+    next_dir = tmp_path / ".next"
+    next_dir.mkdir()
+    (next_dir / "ignored.js").write_text("const x = Date.now()\n", encoding="utf-8")
+    coverage_dir = tmp_path / "coverage"
+    coverage_dir.mkdir()
+    (coverage_dir / "ignored.ts").write_text("const x = Date.now()\n", encoding="utf-8")
+
+    result = scan_repository(tmp_path)
+
+    assert result.python_file_count == 0
+    assert result.js_ts_file_count == 1
+    finding = result.js_ts_files[0]
+    assert finding.path == "billing.ts"
+    assert finding.language == "typescript"
+    assert finding.uses_js_new_date
+    assert finding.uses_js_date_string_constructor
+    assert finding.uses_js_date_now
+    assert finding.uses_js_local_date_accessors

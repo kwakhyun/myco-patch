@@ -1,7 +1,7 @@
 # Safety
 
-MycoPatch is local-first and offline. It does not call external APIs, start background services, run containers, or modify application source files.
-Version 0.2 keeps those boundaries while adding opt-in aggressive probes.
+MycoPatch is local-first and offline by default. It does not call external APIs, start background services, run containers, run package managers, or modify application source files.
+Version 0.4 keeps those boundaries while adding dependency-free JavaScript/TypeScript timezone probes.
 
 ## Command Policy
 
@@ -10,10 +10,13 @@ The MVP allows only:
 - `python`
 - `python3`
 - `pytest`
+- `node --test .myco/probes/generated_tests/*.mjs`
 - `git status`
 - `git diff`
 
 Dangerous fragments are blocked by default, including destructive filesystem commands, network tools, secret dumping patterns, cloud CLIs, Kubernetes, and privileged Docker.
+
+JavaScript/TypeScript verification uses `node --test <generated-probe.mjs>` only. Package-manager commands such as `npm`, `npx`, `yarn`, and `pnpm` are blocked in this milestone.
 
 ## No-Network Default
 
@@ -35,6 +38,8 @@ Generated files live under `.myco/`. Memory and cost records are append-only JSO
 Every model-provider call, including offline heuristic calls, is recorded in `.myco/reports/cost_ledger.jsonl`.
 
 Aggressive probes are clearly labeled and may intentionally fail while a risky static pattern remains. They are written only under `.myco/probes/generated_tests/`, and each aggressive probe has a sibling Markdown explanation describing why it may fail and what a human should review.
+
+JS/TS probes read the target source file as text. They do not import application modules, transpile TypeScript, install dependencies, or execute project test scripts.
 
 ## Future Capability Leases
 

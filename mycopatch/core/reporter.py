@@ -24,6 +24,7 @@ def write_repo_weather(
         "- Repo path: .",
         f"- Repo name: {Path(scan.repo_root).name}",
         f"- Python files: {scan.python_file_count}",
+        f"- JS/TS files: {scan.js_ts_file_count}",
         f"- Test files: {scan.test_file_count}",
         f"- Framework hints: {', '.join(scan.framework_hints) if scan.framework_hints else 'none detected'}",
         "",
@@ -37,6 +38,7 @@ def write_repo_weather(
                     f"### {risk.file_path}",
                     "",
                     f"- Risk type: {risk.risk_type}",
+                    f"- Language: {risk.language}",
                     f"- Score: {risk.score}",
                     f"- Confidence: {risk.confidence}",
                     f"- Nearby test detected: {'yes' if risk.nearby_test_detected else 'no'}",
@@ -98,10 +100,15 @@ def build_console_report(repo_root: Path | str) -> dict[str, object]:
     events = read_memory_events(repo_root)
     counts: Counter[str] = summarize_memory(events)
     costs = summarize_cost(repo_root)
-    probe_files = list(get_paths(repo_root).generated_tests.glob("test_myco_*.py"))
+    generated_tests = get_paths(repo_root).generated_tests
+    probe_files = [
+        *generated_tests.glob("test_myco_*.py"),
+        *generated_tests.glob("test_myco_*.mjs"),
+    ]
     return {
         "memory_events": len(events),
-        "probes_generated": len(probe_files),
+        "probes_generated": counts.get("probe_generated", 0),
+        "probe_files": len(probe_files),
         "passed_probes": counts.get("probe_passed", 0),
         "failed_probes": counts.get("probe_failed", 0),
         "inconclusive_probes": counts.get("probe_inconclusive", 0)

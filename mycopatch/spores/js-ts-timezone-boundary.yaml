@@ -1,0 +1,40 @@
+name: js-ts-timezone-boundary
+version: 0.4.0
+language: javascript-typescript
+description: Detects JavaScript and TypeScript Date boundary and timezone risks.
+risk_type: timezone_boundary
+triggers:
+  path_keywords:
+    - billing
+    - invoice
+    - subscription
+    - schedule
+    - expiry
+    - expiration
+    - deadline
+    - renewal
+    - payment
+    - report
+  code_patterns:
+    - new Date()
+    - Date.now()
+    - Date.parse
+    - new Date("YYYY-MM-DD")
+    - getDate()
+    - getMonth()
+    - getHours()
+    - setDate()
+    - setMonth()
+probe:
+  type: node-test
+  strategy: boundary_dates
+budget:
+  max_input_tokens: 6000
+  max_output_tokens: 1200
+  max_runtime_seconds: 60
+safety:
+  network: deny
+  write_paths:
+    - .myco/probes/generated_tests
+    - .myco/reports
+    - .myco/memory

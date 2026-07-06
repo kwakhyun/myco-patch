@@ -25,13 +25,21 @@
 - Track token and dollar budgets for every provider call.
 - Limit provider use to failure summaries, probe ideas, and patch recommendation text.
 
-## v0.4 Patch Generation
+## v0.4 JS/TS Timezone Probes
+
+- Scan `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, and `.cjs` files.
+- Ignore declaration files, package caches, and common JS build outputs.
+- Detect risky Date API usage with line-level evidence.
+- Generate safe and aggressive `node:test` probes that read source as text.
+- Keep package-manager commands out of the default safety policy.
+
+## v0.5 Guarded Patch Generation
 
 - Generate minimal patches only from reproducible failures.
 - Require patch diffs and rollback instructions.
 - Add stronger policy checks before write operations.
 
-## v0.5 Local Model Routing
+## v0.6 Local Model Routing
 
 - Support local models for low-risk summarization and probe drafting.
 - Route tasks by cost, privacy, and confidence.

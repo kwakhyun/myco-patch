@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mycopatch"
-version = "0.3.0"
+version = "0.4.0"
 description = "An offline immune system for codebases: scans, probes, verifies, and remembers reproducible risks."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,7 +12,7 @@ license = { text = "MIT" }
 authors = [
   { name = "MycoPatch Contributors" }
 ]
-keywords = ["testing", "pytest", "cli", "agents", "static-analysis", "regression-tests"]
+keywords = ["testing", "pytest", "node-test", "javascript", "typescript", "cli", "agents", "static-analysis", "regression-tests"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -20,6 +20,8 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: JavaScript",
+  "Programming Language :: TypeScript",
   "Topic :: Software Development :: Testing",
 ]
 dependencies = [

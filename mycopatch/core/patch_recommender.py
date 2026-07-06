@@ -10,10 +10,12 @@ from mycopatch.providers.service import invoke_model_provider
 
 
 FIX_STRATEGY = (
-    "Prefer timezone-aware datetimes. Inject a clock where practical, use "
-    "datetime.now(timezone.utc) for UTC timestamps, avoid datetime.utcnow(), "
-    "and add regression tests around UTC/local midnight, DST transitions, "
-    "month-end, and leap-day behavior."
+    "Clarify whether the code should use UTC, user-local time, or an injected "
+    "clock. For Python, prefer timezone-aware datetimes and avoid "
+    "datetime.utcnow(). For JavaScript/TypeScript, avoid ambiguous Date parsing "
+    "and review local getters/setters. Add regression tests around UTC/local "
+    "midnight, DST transitions, month-end, and leap-day behavior before changing "
+    "production behavior."
 )
 
 
@@ -105,7 +107,20 @@ def write_patch_recommendation_report(
 
 def _suspected_pattern(evidence: list[str]) -> str:
     text = "\n".join(evidence)
-    for pattern in ["datetime.utcnow", "date.today", "datetime.now", "datetime("]:
+    for pattern in [
+        "datetime.utcnow",
+        "date.today",
+        "datetime.now",
+        "datetime(",
+        "new Date(",
+        "Date.now",
+        "Date.parse",
+        "getDate(",
+        "getMonth(",
+        "getHours(",
+        "setDate(",
+        "setMonth(",
+    ]:
         if pattern in text:
             return pattern
     return "timezone/date boundary behavior"

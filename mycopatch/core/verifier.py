@@ -19,15 +19,17 @@ def verify_probe(repo_root: Path | str, probe: Probe, timeout_seconds: int = 60)
             evidence=["Generated probe file is missing."],
         )
 
-    if shutil.which("pytest") is None:
+    command_name = "pytest" if probe.test_runner == "pytest" else "node"
+    if shutil.which(command_name) is None:
         return ProbeResult(
             probe_id=probe.id,
             probe_path=probe.path,
             status="skipped",
-            evidence=["pytest is not available on PATH."],
+            evidence=[f"{command_name} is not available on PATH."],
         )
 
-    result = run_command(["pytest", probe.path], cwd=root, timeout_seconds=timeout_seconds)
+    command = ["pytest", probe.path] if probe.test_runner == "pytest" else ["node", "--test", probe.path]
+    result = run_command(command, cwd=root, timeout_seconds=timeout_seconds)
     if not result.allowed:
         return ProbeResult(
             probe_id=probe.id,
@@ -46,7 +48,7 @@ def verify_probe(repo_root: Path | str, probe: Probe, timeout_seconds: int = 60)
         stdout=_sanitize_output(result.stdout, root),
         stderr=_sanitize_output(result.stderr, root),
         duration_seconds=result.duration_seconds,
-        evidence=[f"pytest return code: {result.return_code}"],
+        evidence=[f"{probe.test_runner} return code: {result.return_code}"],
     )
 
 

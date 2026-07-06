@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-SCHEMA_VERSION = "0.3.0"
+SCHEMA_VERSION = "0.4.0"
 
 
 def utc_now() -> datetime:
@@ -28,6 +28,7 @@ class EvidenceItem(SerializableModel):
 
 class FileFinding(SerializableModel):
     path: str
+    language: Literal["python", "javascript", "typescript"] = "python"
     line_count: int
     imports_datetime: bool = False
     uses_datetime_now: bool = False
@@ -36,6 +37,11 @@ class FileFinding(SerializableModel):
     uses_naive_datetime_construction: bool = False
     uses_replace_tzinfo: bool = False
     uses_timezone_naive_comparison: bool = False
+    uses_js_new_date: bool = False
+    uses_js_date_now: bool = False
+    uses_js_date_parse: bool = False
+    uses_js_date_string_constructor: bool = False
+    uses_js_local_date_accessors: bool = False
     contains_timezone_keywords: bool = False
     is_test_file: bool = False
     evidence: list[str] = Field(default_factory=list)
@@ -46,20 +52,34 @@ class RepoScanResult(SerializableModel):
     repo_root: str
     scanned_at: datetime = Field(default_factory=utc_now)
     python_files: list[FileFinding] = Field(default_factory=list)
+    js_ts_files: list[FileFinding] = Field(default_factory=list)
     ignored_dirs: list[str] = Field(default_factory=list)
     framework_hints: list[str] = Field(default_factory=list)
+
+    @property
+    def source_files(self) -> list[FileFinding]:
+        return [*self.python_files, *self.js_ts_files]
 
     @property
     def python_file_count(self) -> int:
         return len(self.python_files)
 
     @property
+    def js_ts_file_count(self) -> int:
+        return len(self.js_ts_files)
+
+    @property
+    def source_file_count(self) -> int:
+        return len(self.source_files)
+
+    @property
     def test_file_count(self) -> int:
-        return sum(1 for finding in self.python_files if finding.is_test_file)
+        return sum(1 for finding in self.source_files if finding.is_test_file)
 
 
 class RiskFinding(SerializableModel):
     file_path: str
+    language: Literal["python", "javascript", "typescript"] = "python"
     risk_type: str
     score: int
     evidence: list[str] = Field(default_factory=list)
@@ -114,6 +134,7 @@ class Probe(SerializableModel):
     spore_name: str
     safe_default: bool = True
     mode: Literal["safe", "aggressive"] = "safe"
+    test_runner: Literal["pytest", "node-test"] = "pytest"
     explanation_path: str | None = None
 
 

@@ -50,7 +50,10 @@ def _suggest_probe_ideas(prompt: str) -> str:
         "Keep the generated probe file isolated under .myco/probes/generated_tests/.",
         "Use line-number evidence from static analysis as the probe metadata.",
     ]
-    if "datetime.utcnow" in lowered or "date.today" in lowered or "datetime.now" in lowered:
+    if any(
+        pattern in lowered
+        for pattern in ["datetime.utcnow", "date.today", "datetime.now", "new date", "date.now", "date.parse"]
+    ):
         ideas.append("Review UTC/local midnight, DST transition, month-end, and leap-day cases.")
     if "no nearby test" in lowered:
         ideas.append("Create a nearby test file before changing production behavior.")
@@ -64,6 +67,11 @@ def _draft_patch_recommendation(prompt: str) -> str:
             "Prefer timezone-aware UTC timestamps, usually datetime.now(timezone.utc), "
             "and add focused regression tests before changing behavior."
         )
+    if "new date" in lowered or "date.now" in lowered or "date.parse" in lowered:
+        return (
+            "Clarify whether the JavaScript Date logic should use UTC, user-local time, or an injected clock, "
+            "then add focused boundary tests before changing behavior."
+        )
     if "date.today" in lowered or "datetime.now" in lowered:
         return (
             "Inject a clock or date provider and test boundary behavior around local and UTC dates."
@@ -71,4 +79,3 @@ def _draft_patch_recommendation(prompt: str) -> str:
     return (
         "Review the failing probe evidence, confirm intended behavior, and add a regression test before applying a manual fix."
     )
-
