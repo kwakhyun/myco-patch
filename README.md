@@ -1,43 +1,60 @@
 # MycoPatch
 
-[한국어](README.ko.md) | English
+한국어 | [English](README.en.md)
 
-MycoPatch is an offline immune system for codebases.
+MycoPatch는 코드베이스를 위한 오프라인 면역 시스템입니다.
 
-Most coding agents wait for a user to describe a bug. MycoPatch scans a repository, predicts fragile areas, creates small probes, runs them safely, records evidence, and keeps reusable immune memory under `.myco/`.
+## 핵심 가치
 
-Version 0.4 is intentionally scoped: it is a safe Python + pytest and JavaScript/TypeScript + `node:test` timezone/date-boundary bug-hunting tool with deterministic heuristics. Optional model-provider interfaces exist for advisory text, but offline heuristic mode is the default.
+MycoPatch의 핵심 가치는 **AI가 코드를 고치기 전에, 먼저 재현 가능한 증거를 만든다**는 것입니다.
 
-## Why It Is Different
+일반 코딩 에이전트는 사용자가 버그를 설명하면 바로 패치를 만들려고 합니다. MycoPatch는 반대로 움직입니다. 저장소를 먼저 스캔하고, 취약해 보이는 부분을 찾고, 작은 probe/test를 만들고, 실행 결과와 비용을 기록한 뒤에야 수정 방향을 추천합니다.
 
-- Pull requests are antibodies: patches should answer reproducible evidence.
-- Tests are symptoms made visible: a probe should expose the risk before a fix is proposed.
-- Spores are reusable bug-pattern capsules: risk knowledge is stored outside any one model.
-- Immune memory survives model changes: findings and outcomes are append-only JSONL.
-- Local-first by default: no APIs, no background service, no network dependency.
+이 CLI를 쓰는 이유는 명확합니다.
 
-## Installation
+- 아직 드러나지 않은 위험한 코드를 먼저 찾기 위해
+- 그럴듯하지만 근거 없는 AI 패치를 줄이기 위해
+- 버그 의심 지점을 작은 테스트와 리포트로 남기기 위해
+- 모델이 바뀌어도 남는 `.myco/` immune memory를 쌓기 위해
+- 외부 API, 네트워크, 위험한 command 없이 local-first로 검사하기 위해
+- Python/JavaScript/TypeScript의 날짜와 timezone 경계 버그를 안전하게 탐지하기 위해
 
-For local development:
+한 줄로 말하면, MycoPatch CLI는 **자동 패치 생성기**가 아니라 **코드베이스의 약한 곳을 조용히 찾아내고, 증거를 남기는 안전한 버그 헌팅 도구**입니다.
+
+대부분의 코딩 에이전트는 사용자가 버그를 설명할 때까지 기다립니다. MycoPatch는 저장소를 스캔하고, 취약할 가능성이 높은 영역을 예측하고, 작은 probe를 만들고, 안전하게 실행하고, 근거를 기록하며, 재사용 가능한 immune memory를 `.myco/` 아래에 보관합니다.
+
+버전 0.4의 범위는 의도적으로 좁습니다. Python + pytest와 JavaScript/TypeScript + `node:test` 기반의 timezone/date-boundary 버그 헌팅 도구이며, 결정론적 휴리스틱으로 동작합니다. 선택적 모델 provider 인터페이스는 advisory text 용도로만 존재하고, 기본값은 offline heuristic 모드입니다.
+
+## 무엇이 다른가
+
+- Pull request는 항체입니다. 패치는 재현 가능한 근거에 답해야 합니다.
+- 테스트는 보이는 증상입니다. 수정 전에 probe가 위험을 드러내야 합니다.
+- Spore는 재사용 가능한 버그 패턴 캡슐입니다. 위험 지식은 특정 모델 하나에 묶이지 않습니다.
+- Immune memory는 모델이 바뀌어도 남습니다. 발견 사항과 결과는 append-only JSONL로 기록됩니다.
+- 기본값은 local-first입니다. API 호출, 백그라운드 서비스, 네트워크 의존성이 없습니다.
+
+## 설치
+
+로컬 개발 환경에서는 다음처럼 설치합니다.
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-Then verify the CLI:
+CLI를 확인합니다.
 
 ```bash
 myco --help
 pytest
 ```
 
-## Quickstart
+## 빠른 시작
 
-From the root of a Python or JavaScript/TypeScript repository:
+Python 또는 JavaScript/TypeScript 저장소 루트에서 실행합니다.
 
 ```bash
 myco init
-myco init  # safe to run again; verifies the existing .myco layout
+myco init  # 다시 실행해도 안전합니다. 기존 .myco 레이아웃을 확인합니다.
 myco scan
 myco risks
 myco hunt --budget 30000 --mode safe
@@ -46,20 +63,20 @@ myco report
 myco patch
 ```
 
-What to expect:
+예상 동작:
 
-- `myco init` creates `.myco/`, installs the built-in timezone spores, and is idempotent.
-- `myco scan` writes `.myco/reports/repo_weather.md` with detected Python files, JS/TS files, tests, top risks, and offline cost accounting.
-- `myco risks` prints the top findings with score, confidence, nearby-test status, and first evidence line.
-- `myco hunt --budget 30000 --mode safe` uses deterministic offline heuristics. It generates a safe pytest or `node:test` risk-marker probe and runs only that generated probe file.
-- `myco hunt --budget 30000 --mode aggressive` may generate a failing probe when static evidence is clear. Aggressive probes are labeled, write an explanation markdown file beside the generated test, and still never modify application source files.
-- `myco hunt --dry-run`, `--language`, `--file`, `--limit`, and `--all` let you preview or target probe generation without changing application source files.
-- `myco scan --json` and `myco risks --json` produce machine-readable output for scripts and CI.
-- `myco doctor` checks initialization, pytest/node availability, spore counts, config validity, and provider network status.
-- `myco report` summarizes memory events, probe outcomes, and the zero-dollar offline cost ledger.
-- `myco patch` does not automatically edit arbitrary source files. It writes recommendations only when reproducible probe failures have been recorded.
+- `myco init`은 `.myco/`를 만들고, 내장 timezone spore를 설치하며, 여러 번 실행해도 안전합니다.
+- `myco scan`은 감지된 Python 파일, JS/TS 파일, 테스트, 상위 위험, 오프라인 비용 추정을 포함한 `.myco/reports/repo_weather.md`를 작성합니다.
+- `myco risks`는 score, confidence, nearby-test 여부, 첫 번째 evidence line을 포함한 상위 finding을 출력합니다.
+- `myco hunt --budget 30000 --mode safe`는 결정론적 오프라인 휴리스틱을 사용합니다. 안전한 pytest 또는 `node:test` risk-marker probe를 만들고, 생성된 probe 파일만 실행합니다.
+- `myco hunt --budget 30000 --mode aggressive`는 정적 근거가 명확할 때 실패하는 probe를 만들 수 있습니다. Aggressive probe는 명확히 라벨링되고, 생성된 테스트 옆에 설명용 Markdown 파일을 작성하며, 애플리케이션 소스 파일은 수정하지 않습니다.
+- `myco hunt --dry-run`, `--language`, `--file`, `--limit`, `--all`로 probe 생성을 미리 확인하거나 특정 risk만 대상으로 지정할 수 있습니다.
+- `myco scan --json`과 `myco risks --json`은 script와 CI에서 쓰기 좋은 machine-readable output을 출력합니다.
+- `myco doctor`는 초기화 여부, pytest/node 사용 가능 여부, spore 개수, config 유효성, provider network 상태를 확인합니다.
+- `myco report`는 memory event, probe 결과, 0달러 오프라인 cost ledger를 요약합니다.
+- `myco patch`는 임의의 소스 파일을 자동 수정하지 않습니다. 재현 가능한 probe failure가 기록된 경우에만 recommendation을 작성합니다.
 
-## The `.myco/` Directory
+## `.myco/` 디렉터리
 
 ```text
 .myco/
@@ -81,22 +98,22 @@ What to expect:
   config.toml
 ```
 
-The directory is auditable and append-oriented. It is ignored by default in this repository's `.gitignore`; each downstream project can choose whether to commit its immune memory.
+이 디렉터리는 감사 가능하고 append-oriented입니다. 이 저장소의 `.gitignore`에서는 기본적으로 제외되어 있으며, downstream 프로젝트는 immune memory를 커밋할지 직접 결정할 수 있습니다.
 
 ## Spores
 
-A spore is a YAML capsule that describes a risk pattern, triggers, probe strategy, budget, and safety constraints.
+Spore는 위험 패턴, trigger, probe strategy, budget, safety constraint를 설명하는 YAML 캡슐입니다.
 
-The built-in spores are:
+내장 spore:
 
-- `python-timezone-boundary`, which looks for patterns such as `datetime.now`, `datetime.utcnow`, `date.today`, naive datetime construction, timezone-naive comparisons, and business names like billing, invoice, subscription, expiry, renewal, deadline, payment, and report.
-- `js-ts-timezone-boundary`, which scans `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, and `.cjs` files for patterns such as `new Date()`, `Date.now()`, `Date.parse(...)`, `new Date("YYYY-MM-DD")`, local date getters/setters, and the same timezone-sensitive business names.
+- `python-timezone-boundary`: `datetime.now`, `datetime.utcnow`, `date.today`, naive datetime construction, timezone-naive comparison, 그리고 billing, invoice, subscription, expiry, renewal, deadline, payment, report 같은 비즈니스 이름을 찾습니다.
+- `js-ts-timezone-boundary`: `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs` 파일에서 `new Date()`, `Date.now()`, `Date.parse(...)`, `new Date("YYYY-MM-DD")`, local date getter/setter, 그리고 같은 timezone-sensitive 비즈니스 이름을 찾습니다.
 
-JS/TS probes are dependency-free by default. They use Node's built-in `node:test` runner, read target source files as text, and never import application code or run package-manager commands.
+JS/TS probe는 기본적으로 dependency-free입니다. Node 내장 `node:test` runner를 사용하고, 대상 source file을 text로 읽으며, 애플리케이션 코드를 import하거나 package-manager command를 실행하지 않습니다.
 
-## Safety Model
+## 안전 모델
 
-MycoPatch blocks dangerous commands by default and allows only a narrow local command set:
+MycoPatch는 위험한 command를 기본적으로 차단하고, 좁은 local command set만 허용합니다.
 
 - `python`
 - `python3`
@@ -105,13 +122,13 @@ MycoPatch blocks dangerous commands by default and allows only a narrow local co
 - `git status`
 - `git diff`
 
-Package-manager commands such as `npm`, `npx`, `yarn`, and `pnpm` are not allowed in v0.4. Generated probes do not import application code by default. They act as executable risk markers so the pipeline can be verified without hallucinating project-specific behavior.
+v0.4에서는 `npm`, `npx`, `yarn`, `pnpm` 같은 package-manager command를 허용하지 않습니다. 생성된 probe는 기본적으로 애플리케이션 코드를 import하지 않습니다. 프로젝트별 동작을 환각하지 않고 pipeline을 검증하기 위한 executable risk marker로 동작합니다.
 
-Aggressive probes are opt-in. They may intentionally fail while a risky static pattern remains, but they are written only under `.myco/probes/generated_tests/` and include a markdown explanation for human review.
+Aggressive probe는 opt-in입니다. 위험한 정적 패턴이 남아 있는 동안 의도적으로 실패할 수 있지만, `.myco/probes/generated_tests/` 아래에만 작성되고 human review를 위한 Markdown 설명을 포함합니다.
 
-## Optional Model Providers
+## 선택적 모델 Provider
 
-MycoPatch is offline-first. `.myco/config.toml` defaults to:
+MycoPatch는 offline-first입니다. `.myco/config.toml`의 기본값은 다음과 같습니다.
 
 ```toml
 default_provider = "offline"
@@ -119,29 +136,29 @@ model_name = "offline-heuristic"
 allow_network_for_model_provider = false
 ```
 
-Provider interfaces are limited to advisory tasks:
+Provider 인터페이스는 advisory task로 제한됩니다.
 
-- summarizing failure logs
-- suggesting probe ideas
-- drafting patch recommendation text
+- failure log 요약
+- probe idea 제안
+- patch recommendation text 초안 작성
 
-They are not used for direct source-code patching. External providers such as `openai-compatible` and `local-http` are never called unless `allow_network_for_model_provider = true` is explicitly set. Every provider call, including offline heuristic calls, is recorded in `.myco/reports/cost_ledger.jsonl`.
+Provider는 직접적인 source-code patching에 사용되지 않습니다. `openai-compatible`, `local-http` 같은 외부 provider는 `allow_network_for_model_provider = true`가 명시적으로 설정된 경우에만 호출됩니다. Offline heuristic 호출을 포함한 모든 provider call은 `.myco/reports/cost_ledger.jsonl`에 기록됩니다.
 
-## Current Limitations
+## 현재 제한 사항
 
-- Timezone/date-boundary spores only.
-- JS/TS support is static and dependency-free; it does not parse full TypeScript semantics, transpile files, or integrate with Jest/Vitest yet.
-- Probe generation is heuristic. Safe mode is conservative; aggressive mode still uses static evidence only.
-- Patch generation is recommendation-only.
-- Model providers are advisory only; no source patching uses model output.
-- No autonomous source-code modification.
+- Timezone/date-boundary spore만 제공합니다.
+- JS/TS 지원은 정적 분석 기반이며 dependency-free입니다. 전체 TypeScript semantics를 파싱하지 않고, 파일을 transpile하지 않으며, 아직 Jest/Vitest와 통합하지 않습니다.
+- Probe generation은 휴리스틱입니다. Safe mode는 보수적이고, aggressive mode도 정적 근거만 사용합니다.
+- Patch generation은 recommendation-only입니다.
+- Model provider는 advisory 용도입니다. 모델 출력으로 source patching을 수행하지 않습니다.
+- 자율적인 source-code modification은 없습니다.
 
 ## Roadmap
 
-- v0.1: offline Python/pytest MVP.
-- v0.2: safe/aggressive probe modes, AST-backed datetime evidence, confidence scoring, and risk tables.
-- v0.3: optional advisory model-provider interfaces with offline-first cost tracking.
-- v0.4: dependency-free JS/TS timezone probes using Node's built-in test runner.
-- v0.5: guarded patch generation from reproducible failures.
+- v0.1: 오프라인 Python/pytest MVP.
+- v0.2: safe/aggressive probe mode, AST 기반 datetime evidence, confidence scoring, risk table.
+- v0.3: offline-first cost tracking을 포함한 선택적 advisory model-provider 인터페이스.
+- v0.4: Node 내장 test runner를 사용하는 dependency-free JS/TS timezone probe.
+- v0.5: 재현 가능한 failure 기반의 guarded patch generation.
 - v0.6: local model routing.
-- v1.0: spore marketplace and shared immune memory workflows.
+- v1.0: spore marketplace와 shared immune memory workflow.
