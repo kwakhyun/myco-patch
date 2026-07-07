@@ -108,6 +108,8 @@ def write_patch_recommendation_report(
 def _suspected_pattern(evidence: list[str]) -> str:
     text = "\n".join(evidence)
     for pattern in [
+        "mutable default argument",
+        "broad exception swallowing",
         "datetime.utcnow",
         "date.today",
         "datetime.now",
@@ -123,7 +125,7 @@ def _suspected_pattern(evidence: list[str]) -> str:
     ]:
         if pattern in text:
             return pattern
-    return "timezone/date boundary behavior"
+    return "static risk marker"
 
 
 def _failure_summary_prompt(probe: dict, result: dict, evidence: list[str]) -> str:

@@ -40,3 +40,37 @@ def test_risk_mapper_detects_js_ts_nearby_test_file(tmp_path):
     assert risks[0].file_path == "src/billing.ts"
     assert risks[0].language == "typescript"
     assert risks[0].nearby_test_detected
+
+
+def test_risk_mapper_emits_python_bug_pattern_risks(tmp_path):
+    (tmp_path / "state.py").write_text(
+        "def add_item(item, items=[]):\n"
+        "    items.append(item)\n"
+        "    return items\n"
+        "\n"
+        "def sync_payment():\n"
+        "    try:\n"
+        "        return int('x')\n"
+        "    except Exception:\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+
+    risks = map_timezone_risks(scan_repository(tmp_path))
+    risk_types = {risk.risk_type for risk in risks}
+
+    assert "mutable_default_argument" in risk_types
+    assert "broad_exception_swallow" in risk_types
+    assert all(risk.language == "python" for risk in risks)
+
+
+def test_timezone_keywords_do_not_create_timezone_risk_without_time_api(tmp_path):
+    (tmp_path / "payment.py").write_text(
+        "def sync_payment():\n"
+        "    return 'ok'\n",
+        encoding="utf-8",
+    )
+
+    risks = map_timezone_risks(scan_repository(tmp_path))
+
+    assert risks == []

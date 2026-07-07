@@ -21,7 +21,7 @@ def generate_timezone_probe(
         _ensure_probe_conftest(paths.generated_tests)
     slug = _slugify(risk.file_path)
     mode_suffix = "" if mode == "safe" else "_aggressive"
-    prefix = "js_timezone_boundary" if risk.language in {"javascript", "typescript"} else "timezone_boundary"
+    prefix = _probe_prefix(risk)
     extension = ".mjs" if risk.language in {"javascript", "typescript"} else ".py"
     probe_id = f"{prefix}_{slug}{mode_suffix}"
     probe_path = paths.generated_tests / f"test_myco_{prefix}_{slug}{mode_suffix}{extension}"
@@ -109,7 +109,7 @@ import pytest
 
 
 @pytest.mark.mycopatch_probe
-def test_myco_timezone_boundary_marker():
+def test_myco_static_risk_marker():
     repo_root = Path(__file__).resolve().parents[3]
     target = repo_root / {target_file!r}
     assert target.exists(), "The risky file moved or was removed; refresh MycoPatch probes."
@@ -122,9 +122,8 @@ def test_myco_timezone_boundary_marker():
             "refresh or retire this MycoPatch probe."
         )
 
-    # TODO: Convert this marker into a domain regression test around DST,
-    # month-end, leap-day, or UTC/local midnight behavior once the intended
-    # business rule is known.
+    # TODO: Convert this marker into a domain regression test once the intended
+    # behavior is known.
 '''
 
 
@@ -226,7 +225,7 @@ import pytest
 
 @pytest.mark.mycopatch_probe
 @pytest.mark.mycopatch_aggressive_probe
-def test_myco_timezone_boundary_aggressive_probe():
+def test_myco_static_risk_aggressive_probe():
     repo_root = Path(__file__).resolve().parents[3]
     target = repo_root / {target_file!r}
     assert target.exists(), "The risky file moved or was removed; refresh MycoPatch probes."
@@ -235,8 +234,9 @@ def test_myco_timezone_boundary_aggressive_probe():
     risky_pattern = {pattern!r}
     assert risky_pattern, "Aggressive probe did not have a clear static pattern to check."
     assert risky_pattern not in source, (
-        "Aggressive MycoPatch probe failed because a timezone/date-boundary "
-        "risk marker is still present in "
+        "Aggressive MycoPatch probe failed because a "
+        + {risk.risk_type!r}
+        + " risk marker is still present in "
         + target.name
         + ": "
         + risky_pattern
@@ -249,6 +249,14 @@ def test_myco_timezone_boundary_aggressive_probe():
 def _slugify(path: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", path).strip("_").lower()
     return slug[:80] or "repo"
+
+
+def _probe_prefix(risk: RiskFinding) -> str:
+    if risk.language in {"javascript", "typescript"}:
+        return "js_timezone_boundary"
+    if risk.risk_type == "timezone_boundary":
+        return "timezone_boundary"
+    return f"python_{risk.risk_type}"
 
 
 def _ensure_probe_conftest(generated_tests: Path) -> None:
@@ -282,6 +290,8 @@ def _primary_pattern(risk: RiskFinding) -> str:
         source_pattern = _source_pattern(item.pattern)
         if source_pattern:
             return source_pattern
+    if risk.risk_type in {"mutable_default_argument", "broad_exception_swallow"} and risk.evidence_items:
+        return risk.evidence_items[0].snippet
     text = "\n".join(risk.evidence)
     for pattern in ["datetime.utcnow", "date.today", "datetime.now", "datetime(", "replace(tzinfo"]:
         if pattern in text:

@@ -10,7 +10,8 @@ from rich.table import Table
 
 from mycopatch.core.config import load_config
 from mycopatch.core.cost import record_cost_event
-from mycopatch.core.memory import append_memory_event
+from mycopatch.core.explainer import explain_risk
+from mycopatch.core.memory import append_memory_event, read_memory_events
 from mycopatch.core.models import RepoScanResult, RiskFinding
 from mycopatch.core.patch_recommender import create_patch_recommendations
 from mycopatch.core.paths import ensure_myco_layout, get_paths, is_initialized
@@ -21,8 +22,9 @@ from mycopatch.core.reporter import (
     write_immune_history,
     write_repo_weather,
 )
-from mycopatch.core.risk_mapper import map_timezone_risks
+from mycopatch.core.risk_mapper import map_repo_risks
 from mycopatch.core.spore_loader import load_builtin_spores, load_spores
+from mycopatch.core.verification import select_verification_profiles, verify_profile
 from mycopatch.core.verifier import verify_probe
 from mycopatch.providers.service import invoke_model_provider
 
@@ -52,7 +54,7 @@ def init() -> None:
     already_initialized = is_initialized(Path.cwd())
     paths = ensure_myco_layout(Path.cwd())
     if already_initialized:
-        console.print(f"[green]MycoPatch already initialized; verified layout at[/green] {paths.myco}")
+        console.print(f"[green]MycoPatch already initialized; verified layout at[/green] {_display_path(paths.myco)}")
         return
 
     append_memory_event(
@@ -60,7 +62,7 @@ def init() -> None:
         "repo_initialized",
         {"myco_dir": paths.myco.relative_to(paths.repo_root).as_posix()},
     )
-    console.print(f"[green]Initialized MycoPatch at[/green] {paths.myco}")
+    console.print(f"[green]Initialized MycoPatch at[/green] {_display_path(paths.myco)}")
 
 
 @app.command()
@@ -71,15 +73,24 @@ def scan(
     _require_initialized()
     root = Path.cwd().resolve()
     scan_result = scan_repository(root)
-    risks = map_timezone_risks(scan_result)
+    risks = map_repo_risks(scan_result)
     append_memory_event(
         root,
         "scan_completed",
         {
             "python_files": scan_result.python_file_count,
             "js_ts_files": scan_result.js_ts_file_count,
+            "ecosystems": [ecosystem.name for ecosystem in scan_result.ecosystems],
             "test_files": scan_result.test_file_count,
             "risk_count": len(risks),
+        },
+    )
+    append_memory_event(
+        root,
+        "ecosystems_detected",
+        {
+            "count": len(scan_result.ecosystems),
+            "ecosystems": [ecosystem.json_dict() for ecosystem in scan_result.ecosystems],
         },
     )
     for risk in risks:
@@ -97,9 +108,101 @@ def scan(
 
     console.print(
         f"[green]Scan complete.[/green] Python files: {scan_result.python_file_count}, "
-        f"JS/TS files: {scan_result.js_ts_file_count}, tests: {scan_result.test_file_count}, risks: {len(risks)}"
+        f"JS/TS files: {scan_result.js_ts_file_count}, ecosystems: {len(scan_result.ecosystems)}, "
+        f"tests: {scan_result.test_file_count}, risks: {len(risks)}"
     )
-    console.print(f"Report: {report_path}")
+    console.print(f"Report: {_display_path(report_path)}")
+
+
+@app.command()
+def ecosystems(
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON ecosystem findings."),
+) -> None:
+    """Print detected languages, frameworks, manifests, and verification candidates."""
+    _require_initialized()
+    root = Path.cwd().resolve()
+    scan_result = scan_repository(root)
+    append_memory_event(
+        root,
+        "ecosystems_detected",
+        {
+            "count": len(scan_result.ecosystems),
+            "ecosystems": [ecosystem.json_dict() for ecosystem in scan_result.ecosystems],
+        },
+    )
+
+    if json_output:
+        typer.echo(json.dumps([ecosystem.json_dict() for ecosystem in scan_result.ecosystems], sort_keys=True))
+        return
+
+    if not scan_result.ecosystems:
+        console.print("[yellow]No supported ecosystem manifests or source files detected.[/yellow]")
+        return
+
+    _print_ecosystem_table(scan_result.ecosystems)
+
+
+@app.command()
+def verify(
+    ecosystem: str = typer.Option("all", "--ecosystem", "-e", help="Ecosystem name to verify, or all."),
+    profile: str | None = typer.Option(None, "--profile", help="Run only a specific verification profile id."),
+    run: bool = typer.Option(False, "--run/--no-run", help="Execute selected project test profiles. Default is dry-run."),
+    allow_project_tests: bool = typer.Option(
+        False,
+        "--allow-project-tests",
+        help="Explicitly allow safe project test commands selected by MycoPatch.",
+    ),
+    timeout: int | None = typer.Option(None, min=1, help="Override profile timeout in seconds."),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON verification results."),
+) -> None:
+    """Dry-run or execute safe project verification profiles."""
+    _require_initialized()
+    root = Path.cwd().resolve()
+    config = _load_config_or_exit(root)
+    scan_result = scan_repository(root)
+    profiles = select_verification_profiles(scan_result.ecosystems, ecosystem_name=ecosystem, profile_id=profile)
+    effective_allow = allow_project_tests or config.allow_project_test_commands
+
+    if not profiles:
+        if json_output:
+            typer.echo("[]")
+            return
+        console.print("[yellow]No verification profiles matched the requested filters.[/yellow]")
+        console.print("Run `myco ecosystems` to inspect detected candidates.")
+        return
+
+    results = []
+    for selected_profile in profiles:
+        append_memory_event(root, "verification_profile_selected", selected_profile.json_dict())
+        result = verify_profile(
+            root,
+            selected_profile,
+            run=run,
+            allow_project_tests=effective_allow,
+            timeout_seconds=timeout,
+        )
+        results.append(result)
+        append_memory_event(
+            root,
+            f"verification_{result.status}",
+            result.json_dict(),
+        )
+        record_cost_event(
+            root,
+            input_text=" ".join(selected_profile.command),
+            output_text=result.status,
+            notes=f"offline verification profile {selected_profile.id}",
+        )
+
+    if json_output:
+        typer.echo(json.dumps([result.json_dict() for result in results], sort_keys=True))
+        return
+
+    _print_verification_table(results)
+    if not run:
+        console.print("[yellow]Dry run only.[/yellow] Add `--run --allow-project-tests` to execute selected profiles.")
+    elif not effective_allow:
+        console.print("[yellow]Project test execution was not explicitly allowed.[/yellow]")
 
 
 @app.command()
@@ -127,11 +230,11 @@ def hunt(
     root = Path.cwd().resolve()
     mode_value = mode.value
     scan_result = scan_repository(root)
-    risks = map_timezone_risks(scan_result)
+    risks = map_repo_risks(scan_result)
     spores = load_spores(root)
 
     if not risks:
-        console.print("[yellow]No clear timezone/date-boundary target found.[/yellow]")
+        console.print("[yellow]No clear MycoPatch risk target found.[/yellow]")
         append_memory_event(root, "probe_inconclusive", {"reason": "no clear target"})
         record_cost_event(root, input_text=scan_result.model_dump_json(), budget_limit=budget, notes="inconclusive hunt")
         return
@@ -139,7 +242,7 @@ def hunt(
     matching_risks = _filter_risks(risks, language, target_file)
     selected_risks = matching_risks if all_risks else matching_risks[:limit]
     if not selected_risks:
-        console.print("[yellow]No timezone/date-boundary risks matched the requested filters.[/yellow]")
+        console.print("[yellow]No MycoPatch risks matched the requested filters.[/yellow]")
         if not dry_run:
             append_memory_event(
                 root,
@@ -161,8 +264,8 @@ def hunt(
     for risk in selected_risks:
         spore = _spore_for_risk(spores, risk)
         if spore is None:
-            console.print(f"[yellow]No timezone-boundary spore is available for {risk.language}.[/yellow]")
-            append_memory_event(root, "probe_inconclusive", {"reason": f"missing timezone spore for {risk.language}"})
+            console.print(f"[yellow]No spore is available for {risk.risk_type}.[/yellow]")
+            append_memory_event(root, "probe_inconclusive", {"reason": f"missing spore for {risk.risk_type}"})
             continue
 
         probe_ideas = invoke_model_provider(
@@ -218,14 +321,14 @@ def risks(
     _require_initialized()
     root = Path.cwd().resolve()
     scan_result = scan_repository(root)
-    findings = map_timezone_risks(scan_result)
+    findings = map_repo_risks(scan_result)
     selected = findings[:limit]
 
     if not findings:
         if json_output:
             typer.echo("[]")
             return
-        console.print("[green]No clear timezone/date-boundary risks detected.[/green]")
+        console.print("[green]No clear MycoPatch risks detected.[/green]")
         return
 
     if json_output:
@@ -233,6 +336,56 @@ def risks(
         return
 
     _print_risk_table(selected)
+
+
+@app.command()
+def explain(
+    limit: int = typer.Option(5, min=1, help="Maximum number of risk explanations to show."),
+    target_file: str | None = typer.Option(None, "--file", help="Explain risks for a repository-relative file path or basename."),
+    risk_type: str | None = typer.Option(None, "--risk-type", help="Explain only a specific risk type."),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON explanations."),
+) -> None:
+    """Explain why detected risks matter."""
+    _require_initialized()
+    root = Path.cwd().resolve()
+    scan_result = scan_repository(root)
+    findings = [
+        risk
+        for risk in map_repo_risks(scan_result)
+        if _file_matches(risk, target_file) and _risk_type_matches(risk, risk_type)
+    ][:limit]
+
+    if json_output:
+        typer.echo(
+            json.dumps(
+                [
+                    {
+                        "risk": risk.json_dict(),
+                        "explanation": explain_risk(risk),
+                    }
+                    for risk in findings
+                ],
+                sort_keys=True,
+            )
+        )
+        return
+
+    if not findings:
+        console.print("[green]No matching MycoPatch risks to explain.[/green]")
+        return
+
+    for risk in findings:
+        console.print(f"[bold]{risk.file_path}[/bold] ({risk.risk_type}, {risk.confidence})")
+        console.print(explain_risk(risk))
+        if risk.evidence:
+            console.print("Evidence:")
+            for item in risk.evidence[:4]:
+                console.print(f"- {item}")
+        if risk.recommended_review_steps:
+            console.print("Human review:")
+            for step in risk.recommended_review_steps[:4]:
+                console.print(f"- {step}")
+        console.print("")
 
 
 @app.command()
@@ -252,6 +405,12 @@ def report() -> None:
     table.add_row("Passed probes", str(report_data["passed_probes"]))
     table.add_row("Failed probes", str(report_data["failed_probes"]))
     table.add_row("Inconclusive probes", str(report_data["inconclusive_probes"]))
+    table.add_row("Ecosystem detection events", str(report_data["ecosystems_detected"]))
+    table.add_row("Verification dry runs", str(report_data["verification_dry_run"]))
+    table.add_row("Verification passed", str(report_data["verification_passed"]))
+    table.add_row("Verification failed", str(report_data["verification_failed"]))
+    table.add_row("Verification skipped", str(report_data["verification_skipped"]))
+    table.add_row("Verification blocked", str(report_data["verification_blocked"]))
     cost = report_data["cost"]
     table.add_row("Estimated input tokens", str(cost["estimated_input_tokens"]))
     table.add_row("Estimated output tokens", str(cost["estimated_output_tokens"]))
@@ -275,7 +434,42 @@ def patch() -> None:
         console.print(f"[green]Created {len(recommendations)} recommendation(s).[/green]")
     else:
         console.print("[yellow]No reproducible failures recorded; wrote an empty recommendation report.[/yellow]")
-    console.print(f"Report: {paths.patch_recommendations}")
+    console.print(f"Report: {_display_path(paths.patch_recommendations)}")
+
+
+@app.command("memory")
+def memory_command(
+    event_type: str | None = typer.Option(None, "--type", help="Filter memory events by event type."),
+    limit: int = typer.Option(20, min=1, help="Maximum number of recent memory events to show."),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON memory events."),
+) -> None:
+    """Inspect append-only MycoPatch memory events."""
+    _require_initialized()
+    root = Path.cwd().resolve()
+    events = read_memory_events(root)
+    if event_type is not None:
+        events = [event for event in events if event.event_type == event_type]
+    selected = events[-limit:]
+
+    if json_output:
+        typer.echo(json.dumps([event.json_dict() for event in selected], sort_keys=True))
+        return
+
+    if not selected:
+        console.print("[yellow]No matching memory events found.[/yellow]")
+        return
+
+    table = Table(title="MycoPatch Memory")
+    table.add_column("Created")
+    table.add_column("Event")
+    table.add_column("Summary")
+    for event in selected:
+        table.add_row(
+            event.created_at.isoformat(),
+            event.event_type,
+            _memory_summary(event.payload),
+        )
+    console.print(table)
 
 
 @spores_app.command("list")
@@ -303,14 +497,16 @@ def doctor() -> None:
     table.add_column("Check")
     table.add_column("Status")
     table.add_row(".myco initialized", "yes" if initialized else "no")
-    table.add_row("pytest available", "yes" if _pytest_available() else "no")
-    table.add_row("node available", "yes" if _node_available() else "no")
+    for tool in ["pytest", "node", "go", "cargo", "mvn", "gradle", "dotnet", "ruby", "bundle", "php"]:
+        table.add_row(f"{tool} available", "yes" if _tool_available(tool) else "no")
+    table.add_row("vendor/bin/phpunit available", "yes" if (root / "vendor" / "bin" / "phpunit").exists() else "no")
     table.add_row("built-in spores", str(len(builtin_spores)))
     table.add_row("local spores", str(len(local_spores)))
     table.add_row("config valid", "yes" if config_error is None else f"no: {config_error}")
     if config is not None:
         table.add_row("provider", config.default_provider)
         table.add_row("provider network", "enabled" if config.allow_network_for_model_provider else "disabled")
+        table.add_row("project tests", "enabled" if config.allow_project_test_commands else "explicit flag required")
     console.print(table)
 
 
@@ -366,6 +562,24 @@ def _file_matches(risk: RiskFinding, target_file: str | None) -> bool:
     return risk.file_path == normalized or Path(risk.file_path).name == normalized
 
 
+def _risk_type_matches(risk: RiskFinding, risk_type: str | None) -> bool:
+    return risk_type is None or risk.risk_type == risk_type
+
+
+def _memory_summary(payload: dict) -> str:
+    probe = payload.get("probe") if isinstance(payload.get("probe"), dict) else {}
+    risk = payload.get("risk") if isinstance(payload.get("risk"), dict) else {}
+    result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+    for source in [probe, risk, result, payload]:
+        for key in ["target_file", "file_path", "probe_path", "path", "reason"]:
+            value = source.get(key) if isinstance(source, dict) else None
+            if value:
+                return str(value)
+    if "count" in payload:
+        return f"count={payload['count']}"
+    return "-"
+
+
 def _print_risk_table(risks: list[RiskFinding], title: str = "MycoPatch Top Risks") -> None:
     table = Table(title=title)
     table.add_column("Score", justify="right")
@@ -386,6 +600,42 @@ def _print_risk_table(risks: list[RiskFinding], title: str = "MycoPatch Top Risk
     console.print(table)
 
 
+def _print_ecosystem_table(ecosystems) -> None:
+    table = Table(title="MycoPatch Ecosystems")
+    table.add_column("Ecosystem")
+    table.add_column("Language")
+    table.add_column("Manifests", overflow="fold")
+    table.add_column("Frameworks", overflow="fold")
+    table.add_column("Verification Profiles", overflow="fold")
+    for ecosystem in ecosystems:
+        table.add_row(
+            ecosystem.name,
+            ecosystem.language,
+            ", ".join(ecosystem.manifest_paths) if ecosystem.manifest_paths else "source-only",
+            ", ".join(hint.name for hint in ecosystem.framework_hints) if ecosystem.framework_hints else "none detected",
+            ", ".join(profile.id for profile in ecosystem.verification_profiles) if ecosystem.verification_profiles else "none",
+        )
+    console.print(table)
+
+
+def _print_verification_table(results) -> None:
+    table = Table(title="MycoPatch Verification")
+    table.add_column("Status")
+    table.add_column("Ecosystem")
+    table.add_column("Profile")
+    table.add_column("Command")
+    table.add_column("Evidence")
+    for result in results:
+        table.add_row(
+            result.status,
+            result.ecosystem,
+            result.profile_id,
+            _format_command(result.command),
+            result.evidence[0] if result.evidence else "-",
+        )
+    console.print(table)
+
+
 def _scan_json_payload(
     scan_result: RepoScanResult,
     risks: list[RiskFinding],
@@ -395,6 +645,7 @@ def _scan_json_payload(
         "repo_path": ".",
         "python_files": scan_result.python_file_count,
         "js_ts_files": scan_result.js_ts_file_count,
+        "ecosystems": [ecosystem.json_dict() for ecosystem in scan_result.ecosystems],
         "test_files": scan_result.test_file_count,
         "framework_hints": scan_result.framework_hints,
         "risk_count": len(risks),
@@ -403,23 +654,34 @@ def _scan_json_payload(
     }
 
 
-def _pytest_available() -> bool:
+def _format_command(command: list[str]) -> str:
+    return " ".join(command)
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _tool_available(tool: str) -> bool:
     from shutil import which
 
-    return which("pytest") is not None
-
-
-def _node_available() -> bool:
-    from shutil import which
-
-    return which("node") is not None
+    return which(tool) is not None
 
 
 def _spore_for_risk(spores, risk):
-    if risk.language == "python":
-        name = "python-timezone-boundary"
-    else:
+    if risk.language in {"javascript", "typescript"}:
         name = "js-ts-timezone-boundary"
+    elif risk.risk_type == "timezone_boundary":
+        name = "python-timezone-boundary"
+    elif risk.risk_type == "mutable_default_argument":
+        name = "python-mutable-default-argument"
+    elif risk.risk_type == "broad_exception_swallow":
+        name = "python-broad-exception-swallow"
+    else:
+        return None
     return next((item for item in spores if item.name == name), None)
 
 

@@ -76,6 +76,7 @@ def test_scanner_detects_js_ts_files_and_ignores_build_outputs(tmp_path):
 
     assert result.python_file_count == 0
     assert result.js_ts_file_count == 1
+    assert [ecosystem.name for ecosystem in result.ecosystems] == ["javascript-typescript"]
     finding = result.js_ts_files[0]
     assert finding.path == "billing.ts"
     assert finding.language == "typescript"
@@ -83,3 +84,38 @@ def test_scanner_detects_js_ts_files_and_ignores_build_outputs(tmp_path):
     assert finding.uses_js_date_string_constructor
     assert finding.uses_js_date_now
     assert finding.uses_js_local_date_accessors
+
+
+def test_scanner_detects_python_bug_patterns(tmp_path):
+    (tmp_path / "state.py").write_text(
+        "def add_item(item, items=[]):\n"
+        "    items.append(item)\n"
+        "    return items\n"
+        "\n"
+        "def sync_payment():\n"
+        "    try:\n"
+        "        return int('x')\n"
+        "    except Exception:\n"
+        "        return None\n",
+        encoding="utf-8",
+    )
+
+    result = scan_repository(tmp_path)
+    finding = result.python_files[0]
+
+    assert finding.uses_mutable_default_argument
+    assert finding.uses_broad_exception_swallow
+    assert any(item.pattern == "mutable default argument" for item in finding.bug_pattern_evidence)
+    assert any(item.pattern == "broad exception swallowing" for item in finding.bug_pattern_evidence)
+
+
+def test_scanner_includes_multi_ecosystem_manifest_findings(tmp_path):
+    (tmp_path / "go.mod").write_text("module example\n", encoding="utf-8")
+    (tmp_path / "Cargo.toml").write_text("[package]\nname='example'\n", encoding="utf-8")
+    (tmp_path / "vendor").mkdir()
+    (tmp_path / "vendor" / "ignored.py").write_text("print('ignored')\n", encoding="utf-8")
+
+    result = scan_repository(tmp_path)
+
+    assert [ecosystem.name for ecosystem in result.ecosystems] == ["go", "rust"]
+    assert result.python_file_count == 0

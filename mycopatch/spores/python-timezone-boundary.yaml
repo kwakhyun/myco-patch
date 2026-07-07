@@ -1,5 +1,5 @@
 name: python-timezone-boundary
-version: 0.1.0
+version: 0.6.0
 language: python
 description: Detects naive datetime and date-boundary risks in Python projects.
 risk_type: timezone_boundary
@@ -32,4 +32,3 @@ safety:
     - .myco/probes/generated_tests
     - .myco/reports
     - .myco/memory
-

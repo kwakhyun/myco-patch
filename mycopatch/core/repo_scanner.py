@@ -5,9 +5,11 @@ import json
 import os
 from pathlib import Path
 
+from mycopatch.core.ecosystem_scanner import detect_ecosystems
 from mycopatch.core.models import FileFinding, RepoScanResult, relative_path
 from mycopatch.core.js_ts_datetime_analyzer import analyze_js_ts_datetime_risks
 from mycopatch.core.paths import IGNORED_DIRS
+from mycopatch.core.python_bug_pattern_analyzer import analyze_python_bug_patterns
 from mycopatch.core.python_datetime_analyzer import analyze_datetime_risks
 
 
@@ -53,11 +55,15 @@ def scan_repository(repo_root: Path | str) -> RepoScanResult:
             framework_hints.add("fastapi")
 
     framework_hints.update(_package_json_hints(root))
+    ecosystems = detect_ecosystems(root)
+    for ecosystem in ecosystems:
+        framework_hints.update(hint.name for hint in ecosystem.framework_hints)
 
     return RepoScanResult(
         repo_root=root.as_posix(),
         python_files=sorted(python_files, key=lambda finding: finding.path),
         js_ts_files=sorted(js_ts_files, key=lambda finding: finding.path),
+        ecosystems=ecosystems,
         ignored_dirs=sorted(IGNORED_DIRS),
         framework_hints=sorted(framework_hints),
     )
@@ -71,11 +77,13 @@ def scan_python_file(path: Path, repo_root: Path) -> FileFinding:
         text = ""
 
     datetime_evidence = analyze_datetime_risks(text)
-    evidence = _collect_evidence(text, datetime_evidence)
+    bug_pattern_evidence = analyze_python_bug_patterns(text)
+    evidence = _collect_evidence(text, [*datetime_evidence, *bug_pattern_evidence])
     lowered = f"{rel_path}\n{text}".lower()
     is_test = _is_test_file(path, repo_root)
     imports_datetime = _imports_datetime(text)
     evidence_patterns = {item.pattern for item in datetime_evidence}
+    bug_patterns = {item.pattern for item in bug_pattern_evidence}
 
     return FileFinding(
         path=rel_path,
@@ -89,9 +97,12 @@ def scan_python_file(path: Path, repo_root: Path) -> FileFinding:
         uses_replace_tzinfo="replace(tzinfo=...)" in evidence_patterns,
         uses_timezone_naive_comparison="timezone-naive comparison" in evidence_patterns,
         contains_timezone_keywords=any(keyword in lowered for keyword in TIME_KEYWORDS),
+        uses_mutable_default_argument="mutable default argument" in bug_patterns,
+        uses_broad_exception_swallow="broad exception swallowing" in bug_patterns,
         is_test_file=is_test,
         evidence=evidence,
         datetime_evidence=datetime_evidence,
+        bug_pattern_evidence=bug_pattern_evidence,
     )
 
 

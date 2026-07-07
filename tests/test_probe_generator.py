@@ -84,3 +84,29 @@ def test_probe_generator_creates_js_ts_node_test_probes(tmp_path):
     assert "!source.includes(riskyPattern)" in aggressive_content
     assert (tmp_path / (aggressive_probe.explanation_path or "")).exists()
     assert source_path.read_text(encoding="utf-8") == original_source
+
+
+def test_probe_generator_creates_python_bug_pattern_probe(tmp_path):
+    ensure_myco_layout(tmp_path)
+    source_path = tmp_path / "state.py"
+    original_source = (
+        "def add_item(item, items=[]):\n"
+        "    items.append(item)\n"
+        "    return items\n"
+    )
+    source_path.write_text(original_source, encoding="utf-8")
+    risk = next(
+        item
+        for item in map_timezone_risks(scan_repository(tmp_path))
+        if item.risk_type == "mutable_default_argument"
+    )
+    spore = next(item for item in load_spores(tmp_path) if item.name == "python-mutable-default-argument")
+
+    probe = generate_timezone_probe(tmp_path, risk, spore)
+    content = (tmp_path / probe.path).read_text(encoding="utf-8")
+
+    assert probe.path == ".myco/probes/generated_tests/test_myco_python_mutable_default_argument_state_py.py"
+    assert probe.risk_type == "mutable_default_argument"
+    assert "mutable_default_argument" in content
+    assert "def add_item(item, items=[]):" in content
+    assert source_path.read_text(encoding="utf-8") == original_source

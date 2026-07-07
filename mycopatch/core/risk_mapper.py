@@ -5,23 +5,30 @@ from mycopatch.core.repo_scanner import TIME_KEYWORDS
 
 
 def map_timezone_risks(scan: RepoScanResult) -> list[RiskFinding]:
+    return map_repo_risks(scan)
+
+
+def map_repo_risks(scan: RepoScanResult) -> list[RiskFinding]:
     test_roots = {
         finding.path
         for finding in scan.source_files
         if finding.is_test_file
     }
-    risks = [
-        _risk_for_file(finding, test_roots)
-        for finding in scan.source_files
-        if _has_timezone_signal(finding)
-    ]
+    risks: list[RiskFinding] = []
+    for finding in scan.source_files:
+        if _has_timezone_signal(finding):
+            risks.append(_timezone_risk_for_file(finding, test_roots))
+        if finding.uses_mutable_default_argument:
+            risks.append(_python_bug_risk_for_file(finding, test_roots, "mutable_default_argument"))
+        if finding.uses_broad_exception_swallow:
+            risks.append(_python_bug_risk_for_file(finding, test_roots, "broad_exception_swallow"))
     return sorted(
         (risk for risk in risks if risk.score > 0),
         key=lambda risk: (-risk.score, risk.file_path),
     )
 
 
-def _risk_for_file(finding: FileFinding, test_files: set[str]) -> RiskFinding:
+def _timezone_risk_for_file(finding: FileFinding, test_files: set[str]) -> RiskFinding:
     score = 0
     reasons: list[str] = []
     nearby_test_detected = _has_nearby_test(finding.path, test_files)
@@ -83,12 +90,58 @@ def _risk_for_file(finding: FileFinding, test_files: set[str]) -> RiskFinding:
         language=finding.language,
         risk_type="timezone_boundary",
         score=score,
-        evidence=finding.evidence,
+        evidence=_evidence_lines(finding.datetime_evidence) or finding.evidence,
         evidence_items=finding.datetime_evidence,
         reason=", ".join(reasons),
         confidence=_confidence(score, finding),
         nearby_test_detected=nearby_test_detected,
         recommended_review_steps=_recommended_review_steps(finding, nearby_test_detected),
+    )
+
+
+def _python_bug_risk_for_file(
+    finding: FileFinding,
+    test_files: set[str],
+    risk_type: str,
+) -> RiskFinding:
+    nearby_test_detected = _has_nearby_test(finding.path, test_files)
+    evidence_items = [
+        item for item in finding.bug_pattern_evidence if _risk_type_for_pattern(item.pattern) == risk_type
+    ]
+    score = 0
+    reasons: list[str] = []
+
+    if risk_type == "mutable_default_argument":
+        score += 55
+        reasons.append("defines a function with a mutable default argument")
+    elif risk_type == "broad_exception_swallow":
+        score += 60
+        reasons.append("swallows a broad exception without preserving failure evidence")
+
+    if finding.is_test_file:
+        score -= 20
+        reasons.append("risk appears in a test file")
+    else:
+        score += 10
+        reasons.append("risk appears in source code")
+    if nearby_test_detected:
+        reasons.append("nearby test file detected")
+    else:
+        score += 10
+        reasons.append("no nearby test file detected")
+
+    score = max(score, 0)
+    return RiskFinding(
+        file_path=finding.path,
+        language=finding.language,
+        risk_type=risk_type,
+        score=score,
+        evidence=_evidence_lines(evidence_items),
+        evidence_items=evidence_items,
+        reason=", ".join(reasons),
+        confidence=_bug_confidence(score, risk_type, finding),
+        nearby_test_detected=nearby_test_detected,
+        recommended_review_steps=_bug_review_steps(risk_type, nearby_test_detected),
     )
 
 
@@ -107,8 +160,6 @@ def _has_timezone_signal(finding: FileFinding) -> bool:
             finding.uses_js_date_parse,
             finding.uses_js_date_string_constructor,
             finding.uses_js_local_date_accessors,
-            finding.contains_timezone_keywords,
-            _path_has_keyword(finding.path),
         ]
     )
 
@@ -185,6 +236,16 @@ def _confidence(score: int, finding: FileFinding) -> str:
     return "low"
 
 
+def _bug_confidence(score: int, risk_type: str, finding: FileFinding) -> str:
+    if risk_type == "mutable_default_argument" and score >= 65 and not finding.is_test_file:
+        return "high"
+    if risk_type == "broad_exception_swallow" and score >= 70 and not finding.is_test_file:
+        return "high"
+    if score >= 45:
+        return "medium"
+    return "low"
+
+
 def _recommended_review_steps(finding: FileFinding, nearby_test_detected: bool) -> list[str]:
     steps = [
         "Confirm the intended timezone boundary behavior with a maintainer.",
@@ -207,6 +268,38 @@ def _recommended_review_steps(finding: FileFinding, nearby_test_detected: bool) 
     if not nearby_test_detected:
         steps.append("Create a nearby test file before changing production behavior.")
     return steps
+
+
+def _bug_review_steps(risk_type: str, nearby_test_detected: bool) -> list[str]:
+    if risk_type == "mutable_default_argument":
+        steps = [
+            "Confirm whether the default value is intended to be shared across calls.",
+            "Prefer None as the default and create a new list, dict, or set inside the function.",
+            "Add a regression test with two calls to the function to check state isolation.",
+        ]
+    elif risk_type == "broad_exception_swallow":
+        steps = [
+            "Confirm whether the exception should be handled at this layer.",
+            "Catch a narrower exception type where possible.",
+            "Preserve failure evidence by logging, returning an explicit error, or re-raising after cleanup.",
+        ]
+    else:
+        steps = ["Confirm intended behavior and add a focused regression test."]
+    if not nearby_test_detected:
+        steps.append("Create a nearby test file before changing production behavior.")
+    return steps
+
+
+def _evidence_lines(items) -> list[str]:
+    return [f"L{item.line_number}: {item.snippet}" for item in items]
+
+
+def _risk_type_for_pattern(pattern: str) -> str | None:
+    if pattern == "mutable default argument":
+        return "mutable_default_argument"
+    if pattern == "broad exception swallowing":
+        return "broad_exception_swallow"
+    return None
 
 
 def _stem_without_source_suffix(filename: str) -> str:

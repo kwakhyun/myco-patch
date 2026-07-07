@@ -55,6 +55,10 @@ def _suggest_probe_ideas(prompt: str) -> str:
         for pattern in ["datetime.utcnow", "date.today", "datetime.now", "new date", "date.now", "date.parse"]
     ):
         ideas.append("Review UTC/local midnight, DST transition, month-end, and leap-day cases.")
+    if "mutable_default_argument" in lowered or "mutable default argument" in lowered:
+        ideas.append("Use repeated-call tests to check whether state leaks across function calls.")
+    if "broad_exception_swallow" in lowered or "broad exception swallowing" in lowered:
+        ideas.append("Check whether failure evidence is preserved with logging, explicit errors, or re-raising.")
     if "no nearby test" in lowered:
         ideas.append("Create a nearby test file before changing production behavior.")
     return "\n".join(f"- {idea}" for idea in ideas)
@@ -66,6 +70,16 @@ def _draft_patch_recommendation(prompt: str) -> str:
         return (
             "Prefer timezone-aware UTC timestamps, usually datetime.now(timezone.utc), "
             "and add focused regression tests before changing behavior."
+        )
+    if "mutable default argument" in lowered or "mutable_default_argument" in lowered:
+        return (
+            "Prefer None as the default value, allocate a fresh list/dict/set inside the function, "
+            "and add a repeated-call regression test."
+        )
+    if "broad exception swallowing" in lowered or "broad_exception_swallow" in lowered:
+        return (
+            "Catch a narrower exception type and preserve failure evidence with logging, an explicit error result, "
+            "or re-raising after cleanup."
         )
     if "new date" in lowered or "date.now" in lowered or "date.parse" in lowered:
         return (

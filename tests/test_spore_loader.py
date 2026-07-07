@@ -7,6 +7,8 @@ def test_loads_builtin_spore():
 
     assert any(spore.name == "python-timezone-boundary" for spore in spores)
     assert any(spore.name == "js-ts-timezone-boundary" for spore in spores)
+    assert any(spore.name == "python-mutable-default-argument" for spore in spores)
+    assert any(spore.name == "python-broad-exception-swallow" for spore in spores)
 
 
 def test_repo_local_spore_overrides_builtin(tmp_path):

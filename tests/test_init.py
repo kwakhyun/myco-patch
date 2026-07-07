@@ -14,4 +14,6 @@ def test_init_creates_layout_and_is_idempotent(tmp_path):
     assert paths.constitution.exists()
     assert (paths.spores / "python-timezone-boundary.yaml").exists()
     assert (paths.spores / "js-ts-timezone-boundary.yaml").exists()
+    assert (paths.spores / "python-mutable-default-argument.yaml").exists()
+    assert (paths.spores / "python-broad-exception-swallow.yaml").exists()
     assert paths_again.myco == paths.myco

@@ -12,8 +12,9 @@ def run_command(
     command: list[str],
     cwd: Path | str,
     timeout_seconds: int = 60,
+    allow_project_tests: bool = False,
 ) -> CommandResult:
-    decision = check_command(command)
+    decision = check_command(command, allow_project_tests=allow_project_tests)
     if not decision.allowed:
         return CommandResult(
             command=command,
@@ -52,4 +53,3 @@ def run_command(
             stderr=f"Command timed out after {timeout_seconds} seconds.",
             duration_seconds=duration,
         )
-

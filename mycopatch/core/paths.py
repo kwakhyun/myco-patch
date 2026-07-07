@@ -25,6 +25,11 @@ IGNORED_DIRS = {
     ".turbo",
     "coverage",
     "out",
+    "vendor",
+    "target",
+    ".gradle",
+    "bin",
+    "obj",
 }
 
 MEMORY_FILES = [
@@ -44,7 +49,7 @@ Default boundaries:
 - No network access.
 - No secret exfiltration.
 - No destructive commands.
-- No arbitrary source modification in v0.1.
+- No arbitrary source modification.
 - Patches are recommendations unless a maintainer explicitly applies them.
 """
 
@@ -58,6 +63,7 @@ max_input_tokens = 6000
 max_output_tokens = 1200
 max_cost_usd = 0.0
 allow_network_for_model_provider = false
+allow_project_test_commands = false
 
 # Optional for provider interfaces. Leave blank to keep offline-only behavior.
 provider_base_url = ""

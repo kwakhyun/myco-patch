@@ -10,6 +10,7 @@ def test_init_creates_default_config(tmp_path):
     assert config.default_provider == "offline"
     assert config.model_name == "offline-heuristic"
     assert not config.allow_network_for_model_provider
+    assert not config.allow_project_test_commands
 
 
 def test_load_config_overrides_defaults(tmp_path):
@@ -22,6 +23,7 @@ max_input_tokens = 100
 max_output_tokens = 50
 max_cost_usd = 0.25
 allow_network_for_model_provider = true
+allow_project_test_commands = true
 provider_base_url = "http://127.0.0.1:11434/test"
 api_key_env = "MYCO_TEST_KEY"
 """,
@@ -36,4 +38,4 @@ api_key_env = "MYCO_TEST_KEY"
     assert config.max_output_tokens == 50
     assert config.max_cost_usd == 0.25
     assert config.allow_network_for_model_provider
-
+    assert config.allow_project_test_commands

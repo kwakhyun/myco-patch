@@ -28,9 +28,32 @@ def write_repo_weather(
         f"- Test files: {scan.test_file_count}",
         f"- Framework hints: {', '.join(scan.framework_hints) if scan.framework_hints else 'none detected'}",
         "",
-        "## Top Risks",
+        "## Ecosystems",
         "",
     ]
+    if scan.ecosystems:
+        for ecosystem in scan.ecosystems:
+            lines.extend(
+                [
+                    f"### {ecosystem.name}",
+                    "",
+                    f"- Language: {ecosystem.language}",
+                    f"- Manifests: {', '.join(ecosystem.manifest_paths) if ecosystem.manifest_paths else 'source-only'}",
+                    f"- Frameworks: {', '.join(hint.name for hint in ecosystem.framework_hints) if ecosystem.framework_hints else 'none detected'}",
+                    f"- Test runner candidates: {', '.join(ecosystem.test_runner_candidates) if ecosystem.test_runner_candidates else 'none detected'}",
+                    f"- Verification profiles: {', '.join(profile.id for profile in ecosystem.verification_profiles) if ecosystem.verification_profiles else 'none'}",
+                    "",
+                ]
+            )
+    else:
+        lines.extend(["No supported ecosystems detected.", ""])
+
+    lines.extend(
+        [
+        "## Top Risks",
+        "",
+        ]
+    )
     if risks:
         for risk in risks[:10]:
             lines.extend(
@@ -51,7 +74,7 @@ def write_repo_weather(
             lines.extend(f"  - {step}" for step in risk.recommended_review_steps[:5])
             lines.append("")
     else:
-        lines.extend(["No clear timezone/date-boundary risks detected.", ""])
+        lines.extend(["No clear MycoPatch risks detected.", ""])
 
     lines.extend(
         [
@@ -114,5 +137,11 @@ def build_console_report(repo_root: Path | str) -> dict[str, object]:
         "inconclusive_probes": counts.get("probe_inconclusive", 0)
         + counts.get("probe_skipped", 0)
         + counts.get("probe_blocked", 0),
+        "ecosystems_detected": counts.get("ecosystems_detected", 0),
+        "verification_passed": counts.get("verification_passed", 0),
+        "verification_failed": counts.get("verification_failed", 0),
+        "verification_skipped": counts.get("verification_skipped", 0),
+        "verification_blocked": counts.get("verification_blocked", 0),
+        "verification_dry_run": counts.get("verification_dry_run", 0),
         "cost": costs,
     }

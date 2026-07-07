@@ -19,12 +19,16 @@ def test_cli_smoke_init_scan_hunt_report_patch(tmp_path, monkeypatch):
 
     init_result = runner.invoke(app, ["init"])
     scan_result = runner.invoke(app, ["scan"])
+    ecosystems_result = runner.invoke(app, ["ecosystems", "--json"])
+    verify_result = runner.invoke(app, ["verify", "--no-run"])
     hunt_result = runner.invoke(app, ["hunt", "--budget", "30000"])
     report_result = runner.invoke(app, ["report"])
     patch_result = runner.invoke(app, ["patch"])
 
     assert init_result.exit_code == 0, init_result.output
     assert scan_result.exit_code == 0, scan_result.output
+    assert ecosystems_result.exit_code == 0, ecosystems_result.output
+    assert verify_result.exit_code == 0, verify_result.output
     assert hunt_result.exit_code == 0, hunt_result.output
     assert report_result.exit_code == 0, report_result.output
     assert patch_result.exit_code == 0, patch_result.output
@@ -37,6 +41,9 @@ def test_cli_smoke_init_scan_hunt_report_patch(tmp_path, monkeypatch):
     assert probe_paths
     assert str(tmp_path) not in probe_paths[0].read_text(encoding="utf-8")
     assert (tmp_path / ".myco" / "reports" / "patch_recommendations.md").exists()
+    ecosystems_payload = json.loads(ecosystems_result.output)
+    assert ecosystems_payload[0]["verification_profiles"][0]["id"] == "python-pytest"
+    assert "dry_run" in verify_result.output
 
     generated_text = "\n".join(
         path.read_text(encoding="utf-8")
@@ -108,6 +115,7 @@ def test_cli_scan_and_risks_json_output(tmp_path, monkeypatch):
     assert scan_payload["repo_path"] == "."
     assert scan_payload["python_files"] == 1
     assert scan_payload["risk_count"] == 1
+    assert scan_payload["ecosystems"][0]["name"] == "python"
     assert scan_payload["report_path"] == ".myco/reports/repo_weather.md"
     assert str(tmp_path) not in scan_result.output
 
@@ -207,6 +215,35 @@ def test_console_report_counts_generated_probes_from_memory(tmp_path, monkeypatc
     assert report["probe_files"] == 0
 
 
+def test_cli_explain_and_memory_commands(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "state.py").write_text(
+        "def add_item(item, items=[]):\n"
+        "    items.append(item)\n"
+        "    return items\n",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    assert runner.invoke(app, ["scan"]).exit_code == 0
+    assert runner.invoke(app, ["hunt", "--no-run", "--file", "state.py"]).exit_code == 0
+
+    explain_result = runner.invoke(app, ["explain", "--file", "state.py"])
+    memory_result = runner.invoke(app, ["memory", "--type", "probe_generated"])
+    explain_json_result = runner.invoke(app, ["explain", "--file", "state.py", "--json"])
+    memory_json_result = runner.invoke(app, ["memory", "--type", "probe_generated", "--json"])
+
+    assert explain_result.exit_code == 0, explain_result.output
+    assert "mutable_default_argument" in explain_result.output
+    assert "Mutable default arguments" in explain_result.output
+    assert memory_result.exit_code == 0, memory_result.output
+    assert "probe_generated" in memory_result.output
+    assert "state.py" in memory_result.output
+    assert json.loads(explain_json_result.output)[0]["risk"]["risk_type"] == "mutable_default_argument"
+    assert json.loads(memory_json_result.output)[0]["event_type"] == "probe_generated"
+
+
 def test_cli_aggressive_hunt_records_reproducible_failure(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     source_path = tmp_path / "billing.py"
@@ -244,7 +281,9 @@ def test_cli_smoke_js_ts_repo(tmp_path, monkeypatch):
 
     init_result = runner.invoke(app, ["init"])
     scan_result = runner.invoke(app, ["scan"])
+    ecosystems_result = runner.invoke(app, ["ecosystems", "--json"])
     risks_result = runner.invoke(app, ["risks"])
+    verify_result = runner.invoke(app, ["verify", "--ecosystem", "javascript-typescript", "--no-run"])
     safe_result = runner.invoke(app, ["hunt", "--mode", "safe"])
     aggressive_result = runner.invoke(app, ["hunt", "--mode", "aggressive"])
     report_result = runner.invoke(app, ["report"])
@@ -252,12 +291,17 @@ def test_cli_smoke_js_ts_repo(tmp_path, monkeypatch):
 
     assert init_result.exit_code == 0, init_result.output
     assert scan_result.exit_code == 0, scan_result.output
+    assert ecosystems_result.exit_code == 0, ecosystems_result.output
     assert risks_result.exit_code == 0, risks_result.output
+    assert verify_result.exit_code == 0, verify_result.output
     assert safe_result.exit_code == 0, safe_result.output
     assert aggressive_result.exit_code == 0, aggressive_result.output
     assert report_result.exit_code == 0, report_result.output
     assert patch_result.exit_code == 0, patch_result.output
     assert "typescript" in risks_result.output
+    ecosystems_payload = json.loads(ecosystems_result.output)
+    assert ecosystems_payload[0]["verification_profiles"][0]["id"] == "js-ts-node-test"
+    assert "dry_run" in verify_result.output
     assert source_path.read_text(encoding="utf-8") == source_text
     assert (tmp_path / ".myco" / "probes" / "generated_tests" / "test_myco_js_timezone_boundary_billing_ts.mjs").exists()
     assert (tmp_path / ".myco" / "probes" / "generated_tests" / "test_myco_js_timezone_boundary_billing_ts_aggressive.mjs").exists()

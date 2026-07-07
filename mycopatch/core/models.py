@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-SCHEMA_VERSION = "0.4.0"
+SCHEMA_VERSION = "0.6.0"
 
 
 def utc_now() -> datetime:
@@ -43,9 +43,12 @@ class FileFinding(SerializableModel):
     uses_js_date_string_constructor: bool = False
     uses_js_local_date_accessors: bool = False
     contains_timezone_keywords: bool = False
+    uses_mutable_default_argument: bool = False
+    uses_broad_exception_swallow: bool = False
     is_test_file: bool = False
     evidence: list[str] = Field(default_factory=list)
     datetime_evidence: list[EvidenceItem] = Field(default_factory=list)
+    bug_pattern_evidence: list[EvidenceItem] = Field(default_factory=list)
 
 
 class RepoScanResult(SerializableModel):
@@ -53,6 +56,7 @@ class RepoScanResult(SerializableModel):
     scanned_at: datetime = Field(default_factory=utc_now)
     python_files: list[FileFinding] = Field(default_factory=list)
     js_ts_files: list[FileFinding] = Field(default_factory=list)
+    ecosystems: list["EcosystemFinding"] = Field(default_factory=list)
     ignored_dirs: list[str] = Field(default_factory=list)
     framework_hints: list[str] = Field(default_factory=list)
 
@@ -134,7 +138,7 @@ class Probe(SerializableModel):
     spore_name: str
     safe_default: bool = True
     mode: Literal["safe", "aggressive"] = "safe"
-    test_runner: Literal["pytest", "node-test"] = "pytest"
+    test_runner: str = "pytest"
     explanation_path: str | None = None
 
 
@@ -142,6 +146,44 @@ class ProbeResult(SerializableModel):
     probe_id: str
     probe_path: str
     status: Literal["passed", "failed", "inconclusive", "skipped", "blocked"]
+    return_code: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+    duration_seconds: float = 0.0
+    evidence: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class FrameworkHint(SerializableModel):
+    name: str
+    ecosystem: str
+    source: str
+    confidence: Literal["low", "medium", "high"] = "medium"
+
+
+class VerificationProfile(SerializableModel):
+    id: str
+    ecosystem: str
+    command: list[str]
+    description: str
+    requires_explicit_allow: bool = True
+    default_timeout_seconds: int = 120
+
+
+class EcosystemFinding(SerializableModel):
+    name: str
+    language: str
+    manifest_paths: list[str] = Field(default_factory=list)
+    framework_hints: list[FrameworkHint] = Field(default_factory=list)
+    test_runner_candidates: list[str] = Field(default_factory=list)
+    verification_profiles: list[VerificationProfile] = Field(default_factory=list)
+
+
+class VerificationResult(SerializableModel):
+    profile_id: str
+    ecosystem: str
+    command: list[str]
+    status: Literal["passed", "failed", "skipped", "blocked", "dry_run"]
     return_code: int | None = None
     stdout: str = ""
     stderr: str = ""
@@ -188,6 +230,7 @@ class ModelProviderConfig(SerializableModel):
     max_output_tokens: int = 1200
     max_cost_usd: float = 0.0
     allow_network_for_model_provider: bool = False
+    allow_project_test_commands: bool = False
     provider_base_url: str = ""
     api_key_env: str = "OPENAI_API_KEY"
 

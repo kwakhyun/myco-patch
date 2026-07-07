@@ -1,0 +1,31 @@
+name: python-broad-exception-swallow
+version: 0.6.0
+language: python
+description: Detects broad exception handlers that swallow failures without preserving evidence.
+risk_type: broad_exception_swallow
+triggers:
+  path_keywords:
+    - billing
+    - payment
+    - import
+    - sync
+    - task
+    - worker
+    - job
+  code_patterns:
+    - "except Exception: pass"
+    - "except Exception: return None"
+    - "except: pass"
+probe:
+  type: pytest
+  strategy: static_marker
+budget:
+  max_input_tokens: 6000
+  max_output_tokens: 1200
+  max_runtime_seconds: 60
+safety:
+  network: deny
+  write_paths:
+    - .myco/probes/generated_tests
+    - .myco/reports
+    - .myco/memory
