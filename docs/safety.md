@@ -1,28 +1,42 @@
 # Safety
 
-MycoPatch is local-first and offline by default. It does not call external APIs, start background services, run containers, run package managers, or modify application source files.
-Version 0.4 keeps those boundaries while adding dependency-free JavaScript/TypeScript timezone probes.
+MycoPatch is local-first and offline by default. It does not call external APIs, start background services, run containers, install dependencies, or modify application source files.
+Version 0.6 keeps those boundaries while adding multi-ecosystem detection and explicit-allow project verification profiles.
 
 ## Command Policy
 
-The MVP allows only:
+Generated probes allow only:
 
 - `python`
 - `python3`
-- `pytest`
+- `pytest .myco/probes/generated_tests/*.py`
 - `node --test .myco/probes/generated_tests/*.mjs`
 - `git status`
 - `git diff`
 
 Dangerous fragments are blocked by default, including destructive filesystem commands, network tools, secret dumping patterns, cloud CLIs, Kubernetes, and privileged Docker.
 
-JavaScript/TypeScript verification uses `node --test <generated-probe.mjs>` only. Package-manager commands such as `npm`, `npx`, `yarn`, and `pnpm` are blocked in this milestone.
+Project verification profiles are separate from generated probes. `myco verify` defaults to dry-run. It only executes recognized project test profiles when the user passes `--run --allow-project-tests` or sets `allow_project_test_commands = true` in `.myco/config.toml`.
+
+Recognized project test profiles include:
+
+- `pytest`
+- `node --test`
+- `go test ./...`
+- `cargo test --offline`
+- `mvn test -o`
+- `gradle test --offline`
+- `dotnet test --no-restore`
+- `bundle exec rspec`
+- `vendor/bin/phpunit`
+
+Dependency installation and network-prone commands remain blocked, including `npm`, `npx`, `yarn`, `pnpm`, `pip install`, `go get`, `cargo install`, `bundle install`, `composer install`, and `dotnet restore`.
 
 ## No-Network Default
 
 The built-in spore declares `network: deny`. Future versions may add explicit capability leases for controlled network or write access, but those capabilities should be narrow, time-bounded, and auditable.
 
-Model-provider networking is also denied by default. `.myco/config.toml` starts with `default_provider = "offline"` and `allow_network_for_model_provider = false`. External model providers are never called unless that flag is explicitly changed by the user.
+Model-provider networking is also denied by default. `.myco/config.toml` starts with `default_provider = "offline"`, `allow_network_for_model_provider = false`, and `allow_project_test_commands = false`. External model providers are never called unless that flag is explicitly changed by the user.
 
 Provider output is advisory only and may be used for:
 
@@ -40,6 +54,10 @@ Every model-provider call, including offline heuristic calls, is recorded in `.m
 Aggressive probes are clearly labeled and may intentionally fail while a risky static pattern remains. They are written only under `.myco/probes/generated_tests/`, and each aggressive probe has a sibling Markdown explanation describing why it may fail and what a human should review.
 
 JS/TS probes read the target source file as text. They do not import application modules, transpile TypeScript, install dependencies, or execute project test scripts.
+
+Python bug-pattern probes for mutable defaults and broad exception swallowing also read source files as text. They do not import application modules or mutate production code.
+
+Multi-ecosystem verification records `verification_dry_run`, `verification_passed`, `verification_failed`, `verification_skipped`, or `verification_blocked` memory events. Command output is sanitized so repository-specific absolute paths are replaced with `<repo-root>`.
 
 ## Future Capability Leases
 

@@ -33,13 +33,30 @@
 - Generate safe and aggressive `node:test` probes that read source as text.
 - Keep package-manager commands out of the default safety policy.
 
-## v0.5 Guarded Patch Generation
+## v0.5 More Spores And Explainability
+
+- Add Python mutable default argument detection.
+- Add Python broad exception swallowing detection.
+- Add `myco explain` for human-readable risk explanations.
+- Add `myco memory` for append-only memory inspection.
+- Keep source patching recommendation-only.
+
+## v0.6 Multi-Ecosystem Verification
+
+- Detect Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, and PHP ecosystems.
+- Read common manifests and report framework hints.
+- Add `myco ecosystems` for language, framework, and verification profile inventory.
+- Add `myco verify` with dry-run as the default.
+- Require `--allow-project-tests` or config opt-in before running project test commands.
+- Keep dependency install, network access, and automatic patching blocked.
+
+## v0.7 Guarded Patch Generation
 
 - Generate minimal patches only from reproducible failures.
 - Require patch diffs and rollback instructions.
 - Add stronger policy checks before write operations.
 
-## v0.6 Local Model Routing
+## v0.8 Local Model Routing
 
 - Support local models for low-risk summarization and probe drafting.
 - Route tasks by cost, privacy, and confidence.
