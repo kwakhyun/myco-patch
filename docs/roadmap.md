@@ -61,9 +61,10 @@
 
 ## v0.7 Guarded Patch Generation
 
-- Generate minimal patches only from reproducible failures.
-- Require patch diffs and rollback instructions.
-- Add stronger policy checks before write operations.
+- Draft minimal known-pattern diffs only from recorded aggressive failures.
+- Include original source hashes, unified diffs, and rollback instructions.
+- Reject absolute paths, repository escapes, symlinks, unsupported patterns, and invalid source.
+- Never apply draft artifacts to application source files.
 
 ## v0.8 Local Model Routing
 

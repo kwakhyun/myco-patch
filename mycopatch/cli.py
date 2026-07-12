@@ -15,6 +15,7 @@ from mycopatch.core.explainer import explain_risk
 from mycopatch.core.jsonl import audit_repo_jsonl
 from mycopatch.core.memory import append_memory_event, read_memory_events
 from mycopatch.core.models import RepoScanResult, RiskFinding
+from mycopatch.core.patch_drafter import create_guarded_patch_drafts
 from mycopatch.core.patch_recommender import create_patch_recommendations
 from mycopatch.core.paths import ensure_myco_layout, get_paths, is_initialized
 from mycopatch.core.probe_generator import generate_timezone_probe
@@ -331,7 +332,11 @@ def hunt(
         append_memory_event(
             root,
             f"probe_{result.status}",
-            {"probe": probe.json_dict(), "result": result.json_dict()},
+            {
+                "probe": probe.json_dict(),
+                "result": result.json_dict(),
+                "failure_kind": "static_marker" if result.status == "failed" else None,
+            },
         )
         if result.status == "passed":
             console.print(f"[green]Probe passed:[/green] {probe.path}")
@@ -442,6 +447,8 @@ def report() -> None:
     table.add_row("Verification failed", str(report_data["verification_failed"]))
     table.add_row("Verification skipped", str(report_data["verification_skipped"]))
     table.add_row("Verification blocked", str(report_data["verification_blocked"]))
+    table.add_row("Patch drafts created", str(report_data["patch_drafts_created"]))
+    table.add_row("Patch drafts ineligible", str(report_data["patch_drafts_ineligible"]))
     cost = report_data["cost"]
     table.add_row("Estimated input tokens", str(cost["estimated_input_tokens"]))
     table.add_row("Estimated output tokens", str(cost["estimated_output_tokens"]))
@@ -454,8 +461,14 @@ def report() -> None:
 
 
 @app.command()
-def patch() -> None:
-    """Create manual patch recommendations from reproducible failures."""
+def patch(
+    draft_diffs: bool = typer.Option(
+        False,
+        "--draft-diffs",
+        help="Write guarded unified-diff drafts for eligible known patterns without applying them.",
+    ),
+) -> None:
+    """Create recommendations and optional guarded patch drafts."""
     _require_initialized()
     root = Path.cwd().resolve()
     _load_config_or_exit(root)
@@ -466,6 +479,20 @@ def patch() -> None:
     else:
         console.print("[yellow]No reproducible failures recorded; wrote an empty recommendation report.[/yellow]")
     console.print(f"Report: {_display_path(paths.patch_recommendations)}")
+    if not draft_diffs:
+        return
+
+    drafts, rejected = create_guarded_patch_drafts(root)
+    if drafts:
+        console.print(
+            f"[green]Created {len(drafts)} guarded diff draft(s).[/green] "
+            "Application source files were not modified."
+        )
+    else:
+        console.print("[yellow]No failures were eligible for guarded diff drafting.[/yellow]")
+    if rejected:
+        console.print(f"Ineligible failures: {len(rejected)}")
+    console.print(f"Draft report: {_display_path(paths.guarded_patch_report)}")
 
 
 @app.command("memory")

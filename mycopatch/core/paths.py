@@ -123,6 +123,14 @@ class MycoPaths:
     def patch_recommendations(self) -> Path:
         return self.reports / "patch_recommendations.md"
 
+    @property
+    def patch_drafts(self) -> Path:
+        return self.reports / "patches"
+
+    @property
+    def guarded_patch_report(self) -> Path:
+        return self.reports / "guarded_patch_drafts.md"
+
 
 def get_paths(repo_root: Path | str | None = None) -> MycoPaths:
     root = Path(repo_root) if repo_root is not None else Path.cwd()

@@ -23,7 +23,7 @@ In one sentence, MycoPatch CLI is **not an automatic patch generator**. It is a 
 
 Most coding agents wait for a user to describe a bug. MycoPatch scans a repository, predicts fragile areas, creates small probes, runs them safely, records evidence, and keeps reusable immune memory under `.myco/`.
 
-Version 0.6.1 is intentionally safety-scoped. It keeps Python + pytest and JavaScript/TypeScript + `node:test` probes, then adds hardened ecosystem detection and explicit-allow verification profiles for Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, and PHP.
+Version 0.7 remains deliberately safety-scoped. It can draft a guarded unified diff and rollback document for a narrow known pattern only when explicitly requested. MycoPatch still does not apply patches to application source files.
 
 ## Why It Is Different
 
@@ -65,6 +65,7 @@ myco doctor
 myco report
 myco memory
 myco patch
+myco patch --draft-diffs
 myco --version
 ```
 
@@ -85,6 +86,7 @@ What to expect:
 - `myco report` summarizes memory events, probe outcomes, and the zero-dollar offline cost ledger.
 - `myco memory` shows append-only events from `.myco/memory/*.jsonl`.
 - `myco patch` does not automatically edit arbitrary source files. It writes recommendations only when reproducible probe failures have been recorded.
+- `myco patch --draft-diffs` writes eligible unified diff and rollback artifacts under `.myco/reports/patches/`. The built-in v0.7 transformation is limited to Python `datetime.utcnow()` and is never applied automatically.
 
 ## The `.myco/` Directory
 
@@ -107,6 +109,8 @@ What to expect:
     repo_weather.md
     cost_ledger.jsonl
     immune_history.md
+    guarded_patch_drafts.md
+    patches/
   config.toml
 ```
 
@@ -158,7 +162,7 @@ Provider interfaces are limited to advisory tasks:
 - suggesting probe ideas
 - drafting patch recommendation text
 
-They are not used for direct source-code patching. External providers require both `allow_network_for_model_provider = true` and a positive `max_cost_usd`. Failed attempts and offline fallbacks are recorded in `.myco/reports/cost_ledger.jsonl`.
+They are not used to generate source-code diffs or apply patches. Guarded diffs use deterministic local transformations only. External providers require both `allow_network_for_model_provider = true` and a positive `max_cost_usd`.
 
 ## Current Limitations
 
@@ -166,7 +170,7 @@ They are not used for direct source-code patching. External providers require bo
 - Multi-ecosystem support means detection plus safe verification profiles. Deep bug-pattern analysis is not implemented for every language yet.
 - JS/TS support is static and dependency-free; it does not parse full TypeScript semantics, transpile files, or integrate with Jest/Vitest yet.
 - Probe generation is heuristic. Safe mode is conservative; aggressive mode still uses static evidence only.
-- Patch generation is recommendation-only.
+- Guarded patch generation is opt-in artifact drafting. It does not apply source changes and currently supports only Python `datetime.utcnow()`.
 - Model providers are advisory only; no source patching uses model output.
 - No autonomous source-code modification.
 
@@ -179,6 +183,6 @@ They are not used for direct source-code patching. External providers require bo
 - v0.5: Python mutable defaults, broad exception swallowing, `myco explain`, and `myco memory`.
 - v0.6: ecosystem detection and explicit-allow project verification profiles for Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, and PHP.
 - v0.6.1: command-policy, repository-boundary, monorepo working-directory, JSONL recovery, budget, exit-code, and release-CI hardening.
-- v0.7: guarded patch generation from reproducible failures.
+- v0.7: opt-in guarded diff and rollback artifacts for known-pattern failures, without source application.
 - v0.8: local model routing.
 - v1.0: spore marketplace and shared immune memory workflows.

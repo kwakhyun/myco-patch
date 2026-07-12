@@ -143,5 +143,7 @@ def build_console_report(repo_root: Path | str) -> dict[str, object]:
         "verification_skipped": counts.get("verification_skipped", 0),
         "verification_blocked": counts.get("verification_blocked", 0),
         "verification_dry_run": counts.get("verification_dry_run", 0),
+        "patch_drafts_created": counts.get("patch_draft_created", 0),
+        "patch_drafts_ineligible": counts.get("patch_draft_ineligible", 0),
         "cost": costs,
     }

@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-SCHEMA_VERSION = "0.6.1"
+SCHEMA_VERSION = "0.7.0"
 
 
 def utc_now() -> datetime:
@@ -222,6 +222,20 @@ class PatchRecommendation(SerializableModel):
     suggested_manual_fix_strategy: str
     failure_summary: str = ""
     provider_name: str = "offline-heuristic"
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class GuardedPatchDraft(SerializableModel):
+    id: str
+    target_file: str
+    risk_type: str
+    source_sha256: str
+    patch_path: str
+    rollback_path: str
+    transformation: str
+    evidence: list[str] = Field(default_factory=list)
+    evidence_level: Literal["static_marker", "behavioral_regression"] = "static_marker"
+    applies_source_changes: bool = False
     created_at: datetime = Field(default_factory=utc_now)
 
 

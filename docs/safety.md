@@ -62,6 +62,16 @@ JS/TS probes read the target source file as text. They do not import application
 
 Python bug-pattern probes for mutable defaults and broad exception swallowing also read source files as text. They do not import application modules or mutate production code.
 
+## Guarded Patch Drafts
+
+`myco patch --draft-diffs` is explicit opt-in. It accepts only repository-relative,
+non-symlink UTF-8 source files and known deterministic transformations. Drafts are
+written under `.myco/reports/patches/` as unified diffs with an original SHA-256
+and rollback instructions. MycoPatch never applies these artifacts to application
+source. Static-marker failures are labeled as static evidence, not behavioral proof.
+
+Model providers do not generate guarded diffs.
+
 Multi-ecosystem verification records `verification_dry_run`, `verification_passed`, `verification_failed`, `verification_skipped`, or `verification_blocked` memory events. Command output is sanitized so repository-specific absolute paths are replaced with `<repo-root>`.
 
 ## Future Capability Leases

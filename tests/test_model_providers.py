@@ -1,3 +1,7 @@
+import urllib.error
+
+import pytest
+
 from mycopatch.core.cost import read_cost_events
 from mycopatch.core.memory import append_memory_event
 from mycopatch.core.models import ModelProviderConfig, ModelRequest, ModelResponse
@@ -157,6 +161,8 @@ def test_patch_recommender_uses_fake_provider_for_advisory_text(tmp_path):
     assert recommendations[0].provider_name == "fake"
     assert recommendations[0].failure_summary == "fake response for summarize_failure_logs"
     assert recommendations[0].suggested_manual_fix_strategy == "fake response for draft_patch_recommendation"
+    accepted_patches = tmp_path / ".myco" / "memory" / "accepted_patches.jsonl"
+    assert accepted_patches.read_text(encoding="utf-8") == ""
     model_events = [
         event for event in read_cost_events(tmp_path) if event.event_type == "model_call_recorded"
     ]
@@ -164,6 +170,3 @@ def test_patch_recommender_uses_fake_provider_for_advisory_text(tmp_path):
         "summarize_failure_logs",
         "draft_patch_recommendation",
     ]
-import urllib.error
-
-import pytest

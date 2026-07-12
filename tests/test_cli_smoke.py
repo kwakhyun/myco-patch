@@ -11,7 +11,7 @@ def test_cli_version():
     result = CliRunner().invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "0.6.1"
+    assert result.output.strip() == "0.7.0"
 
 
 def test_cli_smoke_init_scan_hunt_report_patch(tmp_path, monkeypatch):
@@ -297,10 +297,17 @@ def test_cli_aggressive_hunt_records_reproducible_failure(tmp_path, monkeypatch)
     assert "Probe failed reproducibly" in result.output
     assert "Aggressive probe report" in result.output
     assert source_path.read_text(encoding="utf-8") == source_text
+    assert not (tmp_path / ".myco" / "reports" / "patches").exists()
     assert (tmp_path / ".myco" / "probes" / "generated_tests" / "test_myco_timezone_boundary_billing_py_aggressive.py").exists()
     assert (tmp_path / ".myco" / "probes" / "generated_tests" / "test_myco_timezone_boundary_billing_py_aggressive.md").exists()
     events = read_memory_events(tmp_path)
     assert any(event.event_type == "probe_failed" for event in events)
+
+    patch_result = runner.invoke(app, ["patch", "--draft-diffs"])
+    assert patch_result.exit_code == 0, patch_result.output
+    assert "Application source files were not modified" in patch_result.output
+    assert source_path.read_text(encoding="utf-8") == source_text
+    assert list((tmp_path / ".myco" / "reports" / "patches").glob("*.patch"))
 
 
 def test_cli_smoke_js_ts_repo(tmp_path, monkeypatch):

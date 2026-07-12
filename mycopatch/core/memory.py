@@ -16,7 +16,6 @@ EVENT_FILE_MAP = {
     "probe_skipped": "negative_results.jsonl",
     "probe_blocked": "negative_results.jsonl",
     "probe_failed": "failure_patterns.jsonl",
-    "patch_recommendation_created": "accepted_patches.jsonl",
 }
 
 
