@@ -23,7 +23,7 @@ In one sentence, MycoPatch CLI is **not an automatic patch generator**. It is a 
 
 Most coding agents wait for a user to describe a bug. MycoPatch scans a repository, predicts fragile areas, creates small probes, runs them safely, records evidence, and keeps reusable immune memory under `.myco/`.
 
-Version 0.6 is intentionally safety-scoped. It keeps Python + pytest and JavaScript/TypeScript + `node:test` probes, then adds ecosystem detection and safe verification profiles for Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, and PHP. Project-wide test execution is dry-run by default and requires `--run --allow-project-tests` or an explicit config opt-in.
+Version 0.6.1 is intentionally safety-scoped. It keeps Python + pytest and JavaScript/TypeScript + `node:test` probes, then adds hardened ecosystem detection and explicit-allow verification profiles for Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, and PHP.
 
 ## Why It Is Different
 
@@ -65,6 +65,7 @@ myco doctor
 myco report
 myco memory
 myco patch
+myco --version
 ```
 
 What to expect:
@@ -74,13 +75,13 @@ What to expect:
 - `myco ecosystems` shows detected Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, and PHP manifests, framework hints, and verification profile candidates.
 - `myco risks` prints the top findings with score, confidence, nearby-test status, and first evidence line.
 - `myco explain` explains why detected risks matter and lists human review steps.
-- `myco hunt --budget 30000 --mode safe` uses deterministic offline heuristics. It generates a safe pytest or `node:test` risk-marker probe and runs only that generated probe file.
+- `myco hunt --budget 30000 --mode safe` uses deterministic offline heuristics. The budget is a hard estimated-token limit; an insufficient budget records an inconclusive event without generating a probe.
 - `myco hunt --budget 30000 --mode aggressive` may generate a failing probe when static evidence is clear. Aggressive probes are labeled, write an explanation markdown file beside the generated test, and still never modify application source files.
 - `myco hunt --dry-run`, `--language`, `--file`, `--limit`, and `--all` let you preview or target probe generation without changing application source files.
 - `myco scan --json` and `myco risks --json` produce machine-readable output for scripts and CI.
 - `myco verify --no-run` previews project verification profiles without executing them.
-- `myco verify --run --allow-project-tests` executes only project test commands that MycoPatch recognizes as safe verification profiles. It does not install dependencies.
-- `myco doctor` checks initialization, pytest/node/go/cargo/mvn/gradle/dotnet/ruby/bundle/php availability, spore counts, config validity, and provider network status.
+- `myco verify --run --allow-project-tests` executes recognized profiles from their manifest directory. Test failures and policy blocks return exit code 1.
+- `myco doctor` also reports malformed JSONL records with file and line locations.
 - `myco report` summarizes memory events, probe outcomes, and the zero-dollar offline cost ledger.
 - `myco memory` shows append-only events from `.myco/memory/*.jsonl`.
 - `myco patch` does not automatically edit arbitrary source files. It writes recommendations only when reproducible probe failures have been recorded.
@@ -128,14 +129,13 @@ JS/TS probes are dependency-free by default. They use Node's built-in `node:test
 
 MycoPatch blocks dangerous commands by default and allows only a narrow local command set:
 
-- `python`
-- `python3`
+- `python --version` or `python3 --version`
 - generated-probe `pytest .myco/probes/generated_tests/*.py`
 - `node --test .myco/probes/generated_tests/*.mjs`
 - `git status`
 - `git diff`
 
-In v0.6, `myco verify` does not run project-wide tests by default. Verification profiles such as `pytest`, `node --test`, `go test ./...`, `cargo test --offline`, `mvn test -o`, `gradle test --offline`, `dotnet test --no-restore`, `bundle exec rspec`, and `vendor/bin/phpunit` require `--run --allow-project-tests` or `allow_project_test_commands = true` in `.myco/config.toml`.
+In v0.6.1, `myco verify` does not run project-wide tests by default. When enabled, it applies proxy blocking and ecosystem-specific offline settings. This discourages package downloads but is not an OS sandbox that can prevent explicitly allowed test code from opening raw sockets.
 
 Dependency installation and network-prone commands such as `npm`, `npx`, `yarn`, `pnpm`, `pip install`, `go get`, `cargo install`, `bundle install`, `composer install`, and `dotnet restore` remain blocked. Generated probes do not import application code by default. They act as executable risk markers so the pipeline can be verified without hallucinating project-specific behavior.
 
@@ -158,7 +158,7 @@ Provider interfaces are limited to advisory tasks:
 - suggesting probe ideas
 - drafting patch recommendation text
 
-They are not used for direct source-code patching. External providers such as `openai-compatible` and `local-http` are never called unless `allow_network_for_model_provider = true` is explicitly set. Every provider call, including offline heuristic calls, is recorded in `.myco/reports/cost_ledger.jsonl`.
+They are not used for direct source-code patching. External providers require both `allow_network_for_model_provider = true` and a positive `max_cost_usd`. Failed attempts and offline fallbacks are recorded in `.myco/reports/cost_ledger.jsonl`.
 
 ## Current Limitations
 
@@ -178,6 +178,7 @@ They are not used for direct source-code patching. External providers such as `o
 - v0.4: dependency-free JS/TS timezone probes using Node's built-in test runner.
 - v0.5: Python mutable defaults, broad exception swallowing, `myco explain`, and `myco memory`.
 - v0.6: ecosystem detection and explicit-allow project verification profiles for Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, and PHP.
+- v0.6.1: command-policy, repository-boundary, monorepo working-directory, JSONL recovery, budget, exit-code, and release-CI hardening.
 - v0.7: guarded patch generation from reproducible failures.
 - v0.8: local model routing.
 - v1.0: spore marketplace and shared immune memory workflows.

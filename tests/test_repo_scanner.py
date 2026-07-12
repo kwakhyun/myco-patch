@@ -119,3 +119,13 @@ def test_scanner_includes_multi_ecosystem_manifest_findings(tmp_path):
 
     assert [ecosystem.name for ecosystem in result.ecosystems] == ["go", "rust"]
     assert result.python_file_count == 0
+
+
+def test_scanner_ignores_file_symlinks(tmp_path):
+    outside = tmp_path.parent / "outside_billing.py"
+    outside.write_text("from datetime import date\nvalue = date.today()\n", encoding="utf-8")
+    (tmp_path / "billing.py").symlink_to(outside)
+
+    result = scan_repository(tmp_path)
+
+    assert result.python_files == []

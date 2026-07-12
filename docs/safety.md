@@ -1,14 +1,14 @@
 # Safety
 
 MycoPatch is local-first and offline by default. It does not call external APIs, start background services, run containers, install dependencies, or modify application source files.
-Version 0.6 keeps those boundaries while adding multi-ecosystem detection and explicit-allow project verification profiles.
+Version 0.6.1 keeps those boundaries while hardening multi-ecosystem detection and explicit-allow project verification profiles.
 
 ## Command Policy
 
 Generated probes allow only:
 
-- `python`
-- `python3`
+- `python --version`
+- `python3 --version`
 - `pytest .myco/probes/generated_tests/*.py`
 - `node --test .myco/probes/generated_tests/*.mjs`
 - `git status`
@@ -32,11 +32,15 @@ Recognized project test profiles include:
 
 Dependency installation and network-prone commands remain blocked, including `npm`, `npx`, `yarn`, `pnpm`, `pip install`, `go get`, `cargo install`, `bundle install`, `composer install`, and `dotnet restore`.
 
+Verification processes receive proxy-blocking and ecosystem-specific offline environment settings such as `GOPROXY=off` and `CARGO_NET_OFFLINE=true`. These settings reduce accidental downloads. They are not an OS-level network sandbox and cannot stop explicitly approved project test code from using direct sockets.
+
+MycoPatch ignores file symlinks while scanning so repository analysis cannot follow a source or manifest link outside the repository root.
+
 ## No-Network Default
 
 The built-in spore declares `network: deny`. Future versions may add explicit capability leases for controlled network or write access, but those capabilities should be narrow, time-bounded, and auditable.
 
-Model-provider networking is also denied by default. `.myco/config.toml` starts with `default_provider = "offline"`, `allow_network_for_model_provider = false`, and `allow_project_test_commands = false`. External model providers are never called unless that flag is explicitly changed by the user.
+Model-provider networking is also denied by default. External model providers require both `allow_network_for_model_provider = true` and a positive `max_cost_usd`; a zero budget blocks the call before network access.
 
 Provider output is advisory only and may be used for:
 
@@ -50,6 +54,7 @@ Provider output must not be used for direct source-code patching in the current 
 
 Generated files live under `.myco/`. Memory and cost records are append-only JSONL. Reports are Markdown so maintainers can inspect evidence without specialized infrastructure.
 Every model-provider call, including offline heuristic calls, is recorded in `.myco/reports/cost_ledger.jsonl`.
+Malformed JSONL lines are skipped during reporting and surfaced by `myco doctor` with their file and line number.
 
 Aggressive probes are clearly labeled and may intentionally fail while a risky static pattern remains. They are written only under `.myco/probes/generated_tests/`, and each aggressive probe has a sibling Markdown explanation describing why it may fail and what a human should review.
 

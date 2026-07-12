@@ -41,7 +41,7 @@ def write_repo_weather(
                     f"- Manifests: {', '.join(ecosystem.manifest_paths) if ecosystem.manifest_paths else 'source-only'}",
                     f"- Frameworks: {', '.join(hint.name for hint in ecosystem.framework_hints) if ecosystem.framework_hints else 'none detected'}",
                     f"- Test runner candidates: {', '.join(ecosystem.test_runner_candidates) if ecosystem.test_runner_candidates else 'none detected'}",
-                    f"- Verification profiles: {', '.join(profile.id for profile in ecosystem.verification_profiles) if ecosystem.verification_profiles else 'none'}",
+                    f"- Verification profiles: {', '.join(f'{profile.id} @ {profile.working_directory}' for profile in ecosystem.verification_profiles) if ecosystem.verification_profiles else 'none'}",
                     "",
                 ]
             )

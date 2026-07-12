@@ -50,6 +50,15 @@
 - Require `--allow-project-tests` or config opt-in before running project test commands.
 - Keep dependency install, network access, and automatic patching blocked.
 
+## v0.6.1 Safety And Release Hardening
+
+- Close arbitrary Python command and file-symlink policy bypasses.
+- Execute nested project profiles from their manifest directory.
+- Return non-zero status for failed or blocked project verification.
+- Recover valid memory around malformed JSONL records and diagnose corruption.
+- Enforce hunt and external-provider budgets before work begins.
+- Test Python 3.11 through 3.13 and build distributions in CI.
+
 ## v0.7 Guarded Patch Generation
 
 - Generate minimal patches only from reproducible failures.

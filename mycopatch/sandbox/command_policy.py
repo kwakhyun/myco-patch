@@ -3,10 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-ALLOWED_COMMANDS = {
-    "python",
-    "python3",
-}
+PYTHON_EXECUTABLES = {"python", "python3"}
 
 ALLOWED_GIT_SUBCOMMANDS = {
     ("git", "diff"),
@@ -85,8 +82,13 @@ def check_command(command: list[str], allow_project_tests: bool = False) -> Poli
     if project_test_decision is not None:
         return project_test_decision
 
-    if command[0] in ALLOWED_COMMANDS:
-        return PolicyDecision(True, "Command is allowed by MycoPatch policy.")
+    if executable in PYTHON_EXECUTABLES:
+        if len(command) == 2 and command[1] in {"--version", "-V"}:
+            return PolicyDecision(True, "Python version inspection is allowed by MycoPatch policy.")
+        return PolicyDecision(
+            False,
+            "Python is limited to version inspection; arbitrary scripts, modules, and inline code are blocked.",
+        )
 
     if len(command) >= 2 and (command[0], command[1]) in ALLOWED_GIT_SUBCOMMANDS:
         return PolicyDecision(True, "Git read-only inspection command is allowed.")

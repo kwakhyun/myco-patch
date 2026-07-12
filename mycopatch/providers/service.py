@@ -11,6 +11,7 @@ from mycopatch.core.models import (
 )
 from mycopatch.providers.base import (
     BaseModelProvider,
+    ModelBudgetExceeded,
     ModelProviderError,
     NetworkModelProviderDisabled,
 )
@@ -45,6 +46,10 @@ def invoke_model_provider(
     )
     active_provider = provider or get_model_provider(active_config)
     try:
+        if active_provider.requires_network and active_config.max_cost_usd <= 0:
+            raise ModelBudgetExceeded(
+                "Network model calls require max_cost_usd to be greater than zero."
+            )
         response = active_provider.complete(request)
     except NetworkModelProviderDisabled as exc:
         response = _offline_fallback_response(active_config, request, str(exc))
@@ -86,7 +91,7 @@ def _offline_fallback_response(
     )
     fallback = OfflineHeuristicProvider(fallback_config)
     response = fallback.complete(request)
-    response.text = f"{response.text}\n\nNetwork provider skipped: {reason}"
+    response.text = f"{response.text}\n\nModel provider skipped: {reason}"
     return response
 
 

@@ -3,7 +3,8 @@ from mycopatch.core.memory import append_memory_event
 from mycopatch.core.models import ModelProviderConfig, ModelRequest, ModelResponse
 from mycopatch.core.patch_recommender import create_patch_recommendations
 from mycopatch.core.paths import ensure_myco_layout
-from mycopatch.providers.base import BaseModelProvider
+from mycopatch.providers.base import BaseModelProvider, ModelProviderError
+from mycopatch.providers.openai_compatible import OpenAICompatibleProvider
 from mycopatch.providers.service import invoke_model_provider
 
 
@@ -20,6 +21,18 @@ class FakeModelProvider(BaseModelProvider):
             estimated_output_tokens=4,
             estimated_cost_usd=0.0,
         )
+
+
+class FakeNetworkProvider(FakeModelProvider):
+    requires_network = True
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.called = False
+
+    def complete(self, request):
+        self.called = True
+        return super().complete(request)
 
 
 def test_fake_model_provider_call_is_recorded_in_cost_ledger(tmp_path):
@@ -65,8 +78,57 @@ api_key_env = "MYCO_TEST_KEY"
 
     assert response.provider_name == "offline"
     assert not response.network_used
-    assert "Network provider skipped" in response.text
+    assert "Model provider skipped" in response.text
     assert read_cost_events(tmp_path)[-1].event_type == "model_call_recorded"
+
+
+def test_zero_cost_budget_blocks_network_provider_before_call(tmp_path):
+    ensure_myco_layout(tmp_path)
+    config = ModelProviderConfig(
+        default_provider="openai-compatible",
+        model_name="fake-network",
+        allow_network_for_model_provider=True,
+        max_cost_usd=0.0,
+    )
+    provider = FakeNetworkProvider(config)
+
+    response = invoke_model_provider(
+        tmp_path,
+        task="suggest_probe_ideas",
+        prompt="risk",
+        provider=provider,
+        config=config,
+    )
+
+    assert not provider.called
+    assert response.provider_name == "offline"
+    assert "max_cost_usd" in response.text
+    assert read_cost_events(tmp_path)[-1].event_type == "model_call_recorded"
+
+
+def test_openai_compatible_provider_wraps_network_errors(monkeypatch):
+    config = ModelProviderConfig(
+        default_provider="openai-compatible",
+        model_name="test-model",
+        allow_network_for_model_provider=True,
+        max_cost_usd=1.0,
+        api_key_env="MYCO_TEST_KEY",
+    )
+    provider = OpenAICompatibleProvider(config)
+    request = ModelRequest(
+        task="suggest_probe_ideas",
+        prompt="risk",
+        max_input_tokens=100,
+        max_output_tokens=20,
+    )
+    monkeypatch.setenv("MYCO_TEST_KEY", "secret")
+    monkeypatch.setattr(
+        "mycopatch.providers.openai_compatible.urllib.request.urlopen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(urllib.error.URLError("offline")),
+    )
+
+    with pytest.raises(ModelProviderError, match="request failed"):
+        provider.complete(request)
 
 
 def test_patch_recommender_uses_fake_provider_for_advisory_text(tmp_path):
@@ -102,3 +164,6 @@ def test_patch_recommender_uses_fake_provider_for_advisory_text(tmp_path):
         "summarize_failure_logs",
         "draft_patch_recommendation",
     ]
+import urllib.error
+
+import pytest

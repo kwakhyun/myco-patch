@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
 import urllib.request
 
 from mycopatch.core.cost import estimate_tokens
@@ -46,8 +47,11 @@ class OpenAICompatibleProvider(BaseModelProvider):
             },
             method="POST",
         )
-        with urllib.request.urlopen(http_request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(http_request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ModelProviderError(f"OpenAI-compatible provider request failed: {exc}") from exc
 
         text = _extract_openai_text(payload)
         return ModelResponse(
@@ -67,4 +71,3 @@ def _extract_openai_text(payload: dict) -> str:
         return ""
     message = choices[0].get("message") or {}
     return str(message.get("content") or "")
-

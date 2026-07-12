@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from mycopatch.core.jsonl import read_jsonl_models
 from mycopatch.core.models import CostEvent
 from mycopatch.core.paths import get_paths
 
@@ -46,10 +47,7 @@ def read_cost_events(repo_root: Path | str) -> list[CostEvent]:
     paths = get_paths(repo_root)
     if not paths.cost_ledger.exists():
         return []
-    events: list[CostEvent] = []
-    for line in paths.cost_ledger.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            events.append(CostEvent.model_validate_json(line))
+    events, _ = read_jsonl_models(paths.cost_ledger, CostEvent)
     return events
 
 

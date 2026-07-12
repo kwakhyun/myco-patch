@@ -5,6 +5,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
+from mycopatch.core.jsonl import read_jsonl_models
 from mycopatch.core.models import MemoryEvent
 from mycopatch.core.paths import get_paths
 
@@ -50,12 +51,5 @@ def summarize_memory(events: Iterable[MemoryEvent]) -> Counter[str]:
 
 
 def _read_jsonl_events(path: Path) -> list[MemoryEvent]:
-    events: list[MemoryEvent] = []
-    if not path.exists():
-        return events
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        events.append(MemoryEvent.model_validate_json(line))
+    events, _ = read_jsonl_models(path, MemoryEvent)
     return events
-

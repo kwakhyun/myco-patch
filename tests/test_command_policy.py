@@ -5,6 +5,7 @@ def test_policy_allows_expected_commands():
     assert check_command(["node", "--test", ".myco/probes/generated_tests/test_probe.mjs"]).allowed
     assert check_command(["pytest", ".myco/probes/generated_tests/test_probe.py"]).allowed
     assert check_command(["python", "--version"]).allowed
+    assert check_command(["python3", "-V"]).allowed
     assert check_command(["git", "status"]).allowed
     assert check_command(["git", "diff"]).allowed
 
@@ -37,6 +38,19 @@ def test_policy_rejects_unapproved_project_test_shapes_even_with_allow():
 
     for command in commands:
         assert not check_command(command, allow_project_tests=True).allowed
+
+
+def test_policy_blocks_arbitrary_python_execution():
+    commands = [
+        ["python", "-c", "import os; os.remove('target')"],
+        ["python3", "script.py"],
+        ["python", "-m", "http.server"],
+    ]
+
+    for command in commands:
+        decision = check_command(command)
+        assert not decision.allowed
+        assert "arbitrary" in decision.reason
 
 
 def test_policy_limits_node_to_generated_probe_tests():
@@ -86,6 +100,6 @@ def test_policy_blocks_dangerous_commands():
 
 
 def test_policy_does_not_block_dangerous_names_inside_allowed_arguments():
-    decision = check_command(["python", "azure_report.py"])
+    decision = check_command(["git", "diff", "azure_report.py"])
 
     assert decision.allowed

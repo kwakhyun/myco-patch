@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-SCHEMA_VERSION = "0.6.0"
+SCHEMA_VERSION = "0.6.1"
 
 
 def utc_now() -> datetime:
@@ -166,6 +166,7 @@ class VerificationProfile(SerializableModel):
     ecosystem: str
     command: list[str]
     description: str
+    working_directory: str = "."
     requires_explicit_allow: bool = True
     default_timeout_seconds: int = 120
 
@@ -183,6 +184,7 @@ class VerificationResult(SerializableModel):
     profile_id: str
     ecosystem: str
     command: list[str]
+    working_directory: str = "."
     status: Literal["passed", "failed", "skipped", "blocked", "dry_run"]
     return_code: int | None = None
     stdout: str = ""
@@ -226,9 +228,9 @@ class PatchRecommendation(SerializableModel):
 class ModelProviderConfig(SerializableModel):
     default_provider: Literal["offline", "openai-compatible", "local-http"] = "offline"
     model_name: str = "offline-heuristic"
-    max_input_tokens: int = 6000
-    max_output_tokens: int = 1200
-    max_cost_usd: float = 0.0
+    max_input_tokens: int = Field(default=6000, ge=1)
+    max_output_tokens: int = Field(default=1200, ge=1)
+    max_cost_usd: float = Field(default=0.0, ge=0.0)
     allow_network_for_model_provider: bool = False
     allow_project_test_commands: bool = False
     provider_base_url: str = ""

@@ -31,7 +31,7 @@ def detect_ecosystems(repo_root: Path | str) -> list[EcosystemFinding]:
     root = Path(repo_root).resolve()
     files = _walk_repo_files(root)
     source_counts = _source_counts(files)
-    by_name = {path.name: path for path in files}
+    by_name = _index_by_name(files, root)
 
     ecosystems = [
         _python_ecosystem(root, files, by_name, source_counts),
@@ -49,7 +49,7 @@ def detect_ecosystems(repo_root: Path | str) -> list[EcosystemFinding]:
 def _python_ecosystem(
     root: Path,
     files: list[Path],
-    by_name: dict[str, Path],
+    by_name: dict[str, list[Path]],
     source_counts: dict[str, int],
 ) -> EcosystemFinding | None:
     manifests = _existing_named(files, root, {"pyproject.toml", "setup.cfg", "setup.py", "requirements.txt", "pytest.ini", "tox.ini"})
@@ -84,6 +84,7 @@ def _python_ecosystem(
                 ecosystem="python",
                 command=["pytest"],
                 description="Run the repository pytest suite without installing dependencies.",
+                working_directory=_manifest_workdir(manifests, {"pyproject.toml", "pytest.ini", "setup.cfg", "setup.py"}),
             )
         ],
     )
@@ -92,14 +93,14 @@ def _python_ecosystem(
 def _js_ts_ecosystem(
     root: Path,
     files: list[Path],
-    by_name: dict[str, Path],
+    by_name: dict[str, list[Path]],
     source_counts: dict[str, int],
 ) -> EcosystemFinding | None:
     manifests = _existing_named(files, root, {"package.json", "tsconfig.json", "jsconfig.json"})
     if not manifests and source_counts["javascript-typescript"] == 0:
         return None
 
-    package = _read_package_json(by_name.get("package.json"))
+    package = _read_package_json(_preferred_named(by_name, "package.json"))
     deps = _package_dependencies(package)
     frameworks: list[FrameworkHint] = []
     for package_name, hint_name in {
@@ -132,6 +133,7 @@ def _js_ts_ecosystem(
                 ecosystem="javascript-typescript",
                 command=["node", "--test"],
                 description="Run Node's built-in test runner without invoking package managers.",
+                working_directory=_manifest_workdir(manifests, {"package.json"}),
             )
         ],
     )
@@ -140,14 +142,14 @@ def _js_ts_ecosystem(
 def _go_ecosystem(
     root: Path,
     files: list[Path],
-    by_name: dict[str, Path],
+    by_name: dict[str, list[Path]],
     source_counts: dict[str, int],
 ) -> EcosystemFinding | None:
     manifests = _existing_named(files, root, {"go.mod", "go.sum"})
     if not manifests and source_counts["go"] == 0:
         return None
 
-    text = _read_manifest(by_name.get("go.mod"))
+    text = _read_manifest(_preferred_named(by_name, "go.mod"))
     frameworks = _framework_hints(
         "go",
         [
@@ -169,6 +171,7 @@ def _go_ecosystem(
                 ecosystem="go",
                 command=["go", "test", "./..."],
                 description="Run Go tests for all packages.",
+                working_directory=_manifest_workdir(manifests, {"go.mod"}),
             )
         ],
     )
@@ -177,14 +180,14 @@ def _go_ecosystem(
 def _rust_ecosystem(
     root: Path,
     files: list[Path],
-    by_name: dict[str, Path],
+    by_name: dict[str, list[Path]],
     source_counts: dict[str, int],
 ) -> EcosystemFinding | None:
     manifests = _existing_named(files, root, {"Cargo.toml", "Cargo.lock"})
     if not manifests and source_counts["rust"] == 0:
         return None
 
-    text = _read_manifest(by_name.get("Cargo.toml"))
+    text = _read_manifest(_preferred_named(by_name, "Cargo.toml"))
     frameworks = _framework_hints(
         "rust",
         [
@@ -206,6 +209,7 @@ def _rust_ecosystem(
                 ecosystem="rust",
                 command=["cargo", "test", "--offline"],
                 description="Run cargo tests in offline mode.",
+                working_directory=_manifest_workdir(manifests, {"Cargo.toml"}),
             )
         ],
     )
@@ -214,7 +218,7 @@ def _rust_ecosystem(
 def _java_kotlin_ecosystem(
     root: Path,
     files: list[Path],
-    by_name: dict[str, Path],
+    by_name: dict[str, list[Path]],
     source_counts: dict[str, int],
 ) -> EcosystemFinding | None:
     manifests = _existing_named(files, root, {"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"})
@@ -242,6 +246,7 @@ def _java_kotlin_ecosystem(
                 ecosystem="java-kotlin",
                 command=["mvn", "test", "-o"],
                 description="Run Maven tests in offline mode.",
+                working_directory=_manifest_workdir(manifests, {"pom.xml"}),
             )
         )
     if "build.gradle" in by_name or "build.gradle.kts" in by_name:
@@ -252,6 +257,7 @@ def _java_kotlin_ecosystem(
                 ecosystem="java-kotlin",
                 command=["gradle", "test", "--offline"],
                 description="Run Gradle tests in offline mode.",
+                working_directory=_manifest_workdir(manifests, {"build.gradle", "build.gradle.kts"}),
             )
         )
 
@@ -301,6 +307,7 @@ def _dotnet_ecosystem(
                 ecosystem="dotnet",
                 command=["dotnet", "test", "--no-restore"],
                 description="Run .NET tests without restoring packages.",
+                working_directory=_manifest_workdir(manifests, {".sln", ".csproj", ".fsproj", ".vbproj"}, suffix_match=True),
             )
         ],
     )
@@ -309,7 +316,7 @@ def _dotnet_ecosystem(
 def _ruby_ecosystem(
     root: Path,
     files: list[Path],
-    by_name: dict[str, Path],
+    by_name: dict[str, list[Path]],
     source_counts: dict[str, int],
 ) -> EcosystemFinding | None:
     manifests = _existing_named(files, root, {"Gemfile", "Gemfile.lock", ".ruby-version"})
@@ -336,6 +343,7 @@ def _ruby_ecosystem(
                 ecosystem="ruby",
                 command=["bundle", "exec", "rspec"],
                 description="Run RSpec through Bundler without installing gems.",
+                working_directory=_manifest_workdir(manifests, {"Gemfile"}),
             )
         )
     return EcosystemFinding(
@@ -351,7 +359,7 @@ def _ruby_ecosystem(
 def _php_ecosystem(
     root: Path,
     files: list[Path],
-    by_name: dict[str, Path],
+    by_name: dict[str, list[Path]],
     source_counts: dict[str, int],
 ) -> EcosystemFinding | None:
     manifests = _existing_named(files, root, {"composer.json", "composer.lock", "phpunit.xml", "phpunit.xml.dist"})
@@ -380,6 +388,7 @@ def _php_ecosystem(
                 ecosystem="php",
                 command=["vendor/bin/phpunit"],
                 description="Run the project-local PHPUnit binary if dependencies are already installed.",
+                working_directory=_manifest_workdir(manifests, {"composer.json", "phpunit.xml", "phpunit.xml.dist"}),
             )
         ],
     )
@@ -396,8 +405,19 @@ def _walk_repo_files(root: Path) -> list[Path]:
             path = current_root / filename
             if path.name.endswith(".d.ts"):
                 continue
-            results.append(path)
+            if _is_safe_repo_file(path, root):
+                results.append(path)
     return results
+
+
+def _is_safe_repo_file(path: Path, root: Path) -> bool:
+    if path.is_symlink():
+        return False
+    try:
+        path.resolve().relative_to(root)
+    except (OSError, ValueError):
+        return False
+    return path.is_file()
 
 
 def _source_counts(files: list[Path]) -> dict[str, int]:
@@ -411,6 +431,39 @@ def _source_counts(files: list[Path]) -> dict[str, int]:
 
 def _existing_named(files: list[Path], root: Path, names: set[str]) -> list[str]:
     return sorted(relative_path(path, root) for path in files if path.name in names)
+
+
+def _index_by_name(files: list[Path], root: Path) -> dict[str, list[Path]]:
+    indexed: dict[str, list[Path]] = {}
+    for path in files:
+        indexed.setdefault(path.name, []).append(path)
+    for paths in indexed.values():
+        paths.sort(key=lambda path: (len(path.relative_to(root).parts), path.as_posix()))
+    return indexed
+
+
+def _preferred_named(by_name: dict[str, list[Path]], name: str) -> Path | None:
+    paths = by_name.get(name, [])
+    return paths[0] if paths else None
+
+
+def _manifest_workdir(
+    manifest_paths: list[str],
+    names: set[str],
+    *,
+    suffix_match: bool = False,
+) -> str:
+    candidates = []
+    for value in manifest_paths:
+        name = Path(value).name
+        matches = Path(value).suffix in names if suffix_match else name in names
+        if matches:
+            candidates.append(Path(value))
+    if not candidates:
+        return "."
+    selected = min(candidates, key=lambda path: (len(path.parts), path.as_posix()))
+    parent = selected.parent.as_posix()
+    return parent if parent != "." else "."
 
 
 def _joined_manifest_text(root: Path, manifest_paths: list[str]) -> str:

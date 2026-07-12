@@ -7,6 +7,13 @@ from mycopatch.core.memory import read_memory_events
 from mycopatch.core.reporter import build_console_report
 
 
+def test_cli_version():
+    result = CliRunner().invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == "0.6.1"
+
+
 def test_cli_smoke_init_scan_hunt_report_patch(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "billing.py").write_text(
@@ -169,6 +176,34 @@ def test_cli_hunt_dry_run_does_not_generate_probe(tmp_path, monkeypatch):
     assert "Dry run only" in result.output
     assert "billing.ts" in result.output
     assert not list((tmp_path / ".myco" / "probes" / "generated_tests").glob("test_myco_*"))
+
+
+def test_cli_hunt_enforces_token_budget_before_generation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "billing.py").write_text(
+        "from datetime import datetime\ndef expires():\n    return datetime.utcnow()\n",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    result = runner.invoke(app, ["hunt", "--budget", "1", "--no-run"])
+
+    assert result.exit_code == 0, result.output
+    assert "budget exhausted" in result.output
+    assert not list((tmp_path / ".myco" / "probes" / "generated_tests").glob("test_myco_*"))
+
+
+def test_cli_verify_returns_nonzero_when_project_tests_fail(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "test_failure.py").write_text("def test_failure():\n    assert False\n", encoding="utf-8")
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    result = runner.invoke(app, ["verify", "--run", "--allow-project-tests"])
+
+    assert result.exit_code == 1
+    assert "failed" in result.output
 
 
 def test_cli_hunt_language_filter_generates_only_matching_probe(tmp_path, monkeypatch):

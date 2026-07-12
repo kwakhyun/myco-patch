@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 
 from mycopatch.core.cost import estimate_tokens
@@ -33,8 +34,11 @@ class LocalHTTPProvider(BaseModelProvider):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(http_request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(http_request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ModelProviderError(f"Local HTTP provider request failed: {exc}") from exc
 
         text = str(payload.get("text") or payload.get("content") or "")
         return ModelResponse(
@@ -46,4 +50,3 @@ class LocalHTTPProvider(BaseModelProvider):
             estimated_cost_usd=0.0,
             network_used=True,
         )
-

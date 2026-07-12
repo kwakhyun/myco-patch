@@ -8,9 +8,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from mycopatch import __version__
 from mycopatch.core.config import load_config
-from mycopatch.core.cost import record_cost_event
+from mycopatch.core.cost import estimate_tokens, record_cost_event
 from mycopatch.core.explainer import explain_risk
+from mycopatch.core.jsonl import audit_repo_jsonl
 from mycopatch.core.memory import append_memory_event, read_memory_events
 from mycopatch.core.models import RepoScanResult, RiskFinding
 from mycopatch.core.patch_recommender import create_patch_recommendations
@@ -29,7 +31,11 @@ from mycopatch.core.verifier import verify_probe
 from mycopatch.providers.service import invoke_model_provider
 
 
-app = typer.Typer(help="MycoPatch: an offline immune system for codebases.")
+app = typer.Typer(
+    help="MycoPatch: an offline immune system for codebases.",
+    no_args_is_help=True,
+    invoke_without_command=True,
+)
 spores_app = typer.Typer(help="Inspect available spores.")
 app.add_typer(spores_app, name="spores")
 console = Console()
@@ -46,6 +52,15 @@ class LanguageFilter(str, Enum):
     javascript = "javascript"
     typescript = "typescript"
     js_ts = "js-ts"
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(False, "--version", help="Show the MycoPatch version and exit.", is_eager=True),
+) -> None:
+    if version:
+        typer.echo(__version__)
+        raise typer.Exit()
 
 
 @app.command()
@@ -196,18 +211,20 @@ def verify(
 
     if json_output:
         typer.echo(json.dumps([result.json_dict() for result in results], sort_keys=True))
-        return
+    else:
+        _print_verification_table(results)
+        if not run:
+            console.print("[yellow]Dry run only.[/yellow] Add `--run --allow-project-tests` to execute selected profiles.")
+        elif not effective_allow:
+            console.print("[yellow]Project test execution was not explicitly allowed.[/yellow]")
 
-    _print_verification_table(results)
-    if not run:
-        console.print("[yellow]Dry run only.[/yellow] Add `--run --allow-project-tests` to execute selected profiles.")
-    elif not effective_allow:
-        console.print("[yellow]Project test execution was not explicitly allowed.[/yellow]")
+    if any(result.status in {"failed", "blocked"} for result in results):
+        raise typer.Exit(code=1)
 
 
 @app.command()
 def hunt(
-    budget: int = typer.Option(30000, help="Estimated token budget for this hunt."),
+    budget: int = typer.Option(30000, min=1, help="Hard estimated token budget for this hunt."),
     run: bool = typer.Option(True, "--run/--no-run", help="Run generated probes with pytest or node:test."),
     mode: HuntMode = typer.Option(HuntMode.safe, help="Probe generation mode: safe or aggressive."),
     language: LanguageFilter = typer.Option(
@@ -261,6 +278,7 @@ def hunt(
         return
 
     _load_config_or_exit(root)
+    consumed_tokens = 0
     for risk in selected_risks:
         spore = _spore_for_risk(spores, risk)
         if spore is None:
@@ -268,12 +286,25 @@ def hunt(
             append_memory_event(root, "probe_inconclusive", {"reason": f"missing spore for {risk.risk_type}"})
             continue
 
+        risk_prompt = risk.model_dump_json()
+        reserved_tokens = estimate_tokens(risk_prompt) + spore.budget.max_output_tokens
+        if consumed_tokens + reserved_tokens > budget:
+            reason = (
+                f"hunt token budget exhausted before {risk.file_path}: "
+                f"required {reserved_tokens}, remaining {budget - consumed_tokens}"
+            )
+            append_memory_event(root, "probe_inconclusive", {"reason": reason, "risk": risk.json_dict()})
+            console.print(f"[yellow]{reason}[/yellow]")
+            break
+
         probe_ideas = invoke_model_provider(
             root,
             task="suggest_probe_ideas",
-            prompt=risk.model_dump_json(),
+            prompt=risk_prompt,
         )
         probe = generate_timezone_probe(root, risk, spore, mode=mode_value)
+        event_tokens = estimate_tokens(risk_prompt + probe_ideas.text) + estimate_tokens(probe.model_dump_json())
+        consumed_tokens += event_tokens
         append_memory_event(
             root,
             "probe_generated",
@@ -288,7 +319,7 @@ def hunt(
             input_text=scan_result.model_dump_json() + risk.model_dump_json(),
             output_text=probe.model_dump_json(),
             budget_limit=budget,
-            notes=f"offline heuristic {mode_value} probe generation",
+            notes=f"offline heuristic {mode_value} probe generation; hunt tokens consumed={consumed_tokens}",
         )
 
         if not run:
@@ -493,6 +524,7 @@ def doctor() -> None:
     builtin_spores = load_builtin_spores()
     local_spores = [spore for spore in load_spores(root) if spore.source == "local"] if initialized else []
     config, config_error = _try_load_config(root)
+    jsonl_issues = audit_repo_jsonl(root) if initialized else []
     table = Table(title="MycoPatch Doctor")
     table.add_column("Check")
     table.add_column("Status")
@@ -503,11 +535,14 @@ def doctor() -> None:
     table.add_row("built-in spores", str(len(builtin_spores)))
     table.add_row("local spores", str(len(local_spores)))
     table.add_row("config valid", "yes" if config_error is None else f"no: {config_error}")
+    table.add_row("JSONL integrity", "valid" if not jsonl_issues else f"{len(jsonl_issues)} invalid line(s)")
     if config is not None:
         table.add_row("provider", config.default_provider)
         table.add_row("provider network", "enabled" if config.allow_network_for_model_provider else "disabled")
         table.add_row("project tests", "enabled" if config.allow_project_test_commands else "explicit flag required")
     console.print(table)
+    for issue in jsonl_issues[:5]:
+        console.print(f"[yellow]{_display_path(issue.path)}:{issue.line_number}[/yellow] {issue.error}")
 
 
 def _require_initialized() -> None:
@@ -613,7 +648,9 @@ def _print_ecosystem_table(ecosystems) -> None:
             ecosystem.language,
             ", ".join(ecosystem.manifest_paths) if ecosystem.manifest_paths else "source-only",
             ", ".join(hint.name for hint in ecosystem.framework_hints) if ecosystem.framework_hints else "none detected",
-            ", ".join(profile.id for profile in ecosystem.verification_profiles) if ecosystem.verification_profiles else "none",
+            ", ".join(f"{profile.id} @ {profile.working_directory}" for profile in ecosystem.verification_profiles)
+            if ecosystem.verification_profiles
+            else "none",
         )
     console.print(table)
 
@@ -623,6 +660,7 @@ def _print_verification_table(results) -> None:
     table.add_column("Status")
     table.add_column("Ecosystem")
     table.add_column("Profile")
+    table.add_column("Directory")
     table.add_column("Command")
     table.add_column("Evidence")
     for result in results:
@@ -630,6 +668,7 @@ def _print_verification_table(results) -> None:
             result.status,
             result.ecosystem,
             result.profile_id,
+            result.working_directory,
             _format_command(result.command),
             result.evidence[0] if result.evidence else "-",
         )

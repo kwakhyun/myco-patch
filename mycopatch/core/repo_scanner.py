@@ -145,9 +145,19 @@ def _iter_source_files(root: Path) -> list[Path]:
         )
         for filename in sorted(filenames):
             path = current_root / filename
-            if _is_source_file(path):
+            if _is_safe_repo_file(path, root) and _is_source_file(path):
                 results.append(path)
     return results
+
+
+def _is_safe_repo_file(path: Path, root: Path) -> bool:
+    if path.is_symlink():
+        return False
+    try:
+        path.resolve().relative_to(root)
+    except (OSError, ValueError):
+        return False
+    return path.is_file()
 
 
 def _is_source_file(path: Path) -> bool:

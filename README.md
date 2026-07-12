@@ -23,7 +23,7 @@ MycoPatch의 핵심 가치는 **AI가 코드를 고치기 전에, 먼저 재현 
 
 대부분의 코딩 에이전트는 사용자가 버그를 설명할 때까지 기다립니다. MycoPatch는 저장소를 스캔하고, 취약할 가능성이 높은 영역을 예측하고, 작은 probe를 만들고, 안전하게 실행하고, 근거를 기록하며, 재사용 가능한 immune memory를 `.myco/` 아래에 보관합니다.
 
-버전 0.6의 범위는 의도적으로 안전합니다. Python + pytest와 JavaScript/TypeScript + `node:test` 기반 probe는 유지하면서, Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, PHP 생태계를 탐지하고 안전한 검증 profile을 제안합니다. 프로젝트 전체 테스트 실행은 기본 dry-run이며, `--run --allow-project-tests` 또는 config 명시 허용이 있어야 실행됩니다.
+버전 0.6.1의 범위는 의도적으로 안전합니다. Python + pytest와 JavaScript/TypeScript + `node:test` 기반 probe는 유지하면서, Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, PHP 생태계를 탐지하고 안전한 검증 profile을 제안합니다. 프로젝트 전체 테스트 실행은 기본 dry-run이며, `--run --allow-project-tests` 또는 config 명시 허용이 있어야 실행됩니다.
 
 ## 무엇이 다른가
 
@@ -65,6 +65,7 @@ myco doctor
 myco report
 myco memory
 myco patch
+myco --version
 ```
 
 예상 동작:
@@ -74,13 +75,13 @@ myco patch
 - `myco ecosystems`는 Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, PHP manifest와 framework hint, 검증 profile 후보를 보여줍니다.
 - `myco risks`는 score, confidence, nearby-test 여부, 첫 번째 evidence line을 포함한 상위 finding을 출력합니다.
 - `myco explain`은 발견된 위험이 왜 문제인지 사람에게 읽기 쉬운 설명과 review step으로 보여줍니다.
-- `myco hunt --budget 30000 --mode safe`는 결정론적 오프라인 휴리스틱을 사용합니다. 안전한 pytest 또는 `node:test` risk-marker probe를 만들고, 생성된 probe 파일만 실행합니다.
+- `myco hunt --budget 30000 --mode safe`는 결정론적 오프라인 휴리스틱을 사용합니다. budget은 예상 token의 hard limit이며, 부족하면 probe를 만들지 않고 inconclusive event를 기록합니다.
 - `myco hunt --budget 30000 --mode aggressive`는 정적 근거가 명확할 때 실패하는 probe를 만들 수 있습니다. Aggressive probe는 명확히 라벨링되고, 생성된 테스트 옆에 설명용 Markdown 파일을 작성하며, 애플리케이션 소스 파일은 수정하지 않습니다.
 - `myco hunt --dry-run`, `--language`, `--file`, `--limit`, `--all`로 probe 생성을 미리 확인하거나 특정 risk만 대상으로 지정할 수 있습니다.
 - `myco scan --json`과 `myco risks --json`은 script와 CI에서 쓰기 좋은 machine-readable output을 출력합니다.
 - `myco verify --no-run`은 실행 가능한 프로젝트 검증 profile을 보여주는 dry-run입니다.
-- `myco verify --run --allow-project-tests`는 MycoPatch가 안전 profile로 인정한 프로젝트 테스트 명령만 실행합니다. 의존성 설치나 package-manager install은 실행하지 않습니다.
-- `myco doctor`는 초기화 여부, pytest/node/go/cargo/mvn/gradle/dotnet/ruby/bundle/php 사용 가능 여부, spore 개수, config 유효성, provider network 상태를 확인합니다.
+- `myco verify --run --allow-project-tests`는 MycoPatch가 인정한 프로젝트 테스트 profile을 해당 manifest 디렉터리에서 실행합니다. 테스트 실패나 정책 차단은 종료 코드 1을 반환합니다.
+- `myco doctor`는 도구 사용 가능 여부, config, provider network 상태와 JSONL 손상 위치를 확인합니다.
 - `myco report`는 memory event, probe 결과, 0달러 오프라인 cost ledger를 요약합니다.
 - `myco memory`는 `.myco/memory/*.jsonl`에 쌓인 append-only 이벤트를 CLI에서 조회합니다.
 - `myco patch`는 임의의 소스 파일을 자동 수정하지 않습니다. 재현 가능한 probe failure가 기록된 경우에만 recommendation을 작성합니다.
@@ -128,14 +129,13 @@ JS/TS probe는 기본적으로 dependency-free입니다. Node 내장 `node:test`
 
 MycoPatch는 위험한 command를 기본적으로 차단하고, 좁은 local command set만 허용합니다.
 
-- `python`
-- `python3`
+- `python --version` 또는 `python3 --version`
 - generated probe용 `pytest .myco/probes/generated_tests/*.py`
 - `node --test .myco/probes/generated_tests/*.mjs`
 - `git status`
 - `git diff`
 
-v0.6의 `myco verify`는 프로젝트 테스트 명령을 기본적으로 실행하지 않습니다. `pytest`, `node --test`, `go test ./...`, `cargo test --offline`, `mvn test -o`, `gradle test --offline`, `dotnet test --no-restore`, `bundle exec rspec`, `vendor/bin/phpunit` 같은 검증 profile은 `--run --allow-project-tests` 또는 `.myco/config.toml`의 `allow_project_test_commands = true`가 있어야 실행됩니다.
+v0.6.1의 `myco verify`는 프로젝트 테스트 명령을 기본적으로 실행하지 않습니다. 허용 시에도 proxy 차단과 생태계별 offline 환경을 적용합니다. 이는 package download를 억제하는 방어 계층이며, 명시적으로 허용한 프로젝트 테스트 코드의 직접 socket 접근까지 격리하는 OS sandbox는 아닙니다.
 
 `npm`, `npx`, `yarn`, `pnpm`, `pip install`, `go get`, `cargo install`, `bundle install`, `composer install`, `dotnet restore` 같은 dependency install 또는 network-prone command는 차단됩니다. 생성된 probe는 기본적으로 애플리케이션 코드를 import하지 않습니다. 프로젝트별 동작을 환각하지 않고 pipeline을 검증하기 위한 executable risk marker로 동작합니다.
 
@@ -158,7 +158,7 @@ Provider 인터페이스는 advisory task로 제한됩니다.
 - probe idea 제안
 - patch recommendation text 초안 작성
 
-Provider는 직접적인 source-code patching에 사용되지 않습니다. `openai-compatible`, `local-http` 같은 외부 provider는 `allow_network_for_model_provider = true`가 명시적으로 설정된 경우에만 호출됩니다. Offline heuristic 호출을 포함한 모든 provider call은 `.myco/reports/cost_ledger.jsonl`에 기록됩니다.
+Provider는 직접적인 source-code patching에 사용되지 않습니다. 외부 provider는 `allow_network_for_model_provider = true`와 0보다 큰 `max_cost_usd`가 모두 설정된 경우에만 호출됩니다. 실패와 offline fallback을 포함한 모든 provider 시도는 cost ledger에 기록됩니다.
 
 ## 현재 제한 사항
 
@@ -178,6 +178,7 @@ Provider는 직접적인 source-code patching에 사용되지 않습니다. `ope
 - v0.4: Node 내장 test runner를 사용하는 dependency-free JS/TS timezone probe.
 - v0.5: Python mutable default, broad exception swallowing, `myco explain`, `myco memory`.
 - v0.6: Python, JS/TS, Go, Rust, Java/Kotlin, .NET, Ruby, PHP ecosystem 탐지와 명시 허용 기반 project verification profile.
+- v0.6.1: command-policy 우회 차단, symlink 경계, 모노레포 working directory, JSONL 복구, 실제 budget/종료 코드, 릴리스 CI 강화.
 - v0.7: 재현 가능한 failure 기반의 guarded patch generation.
 - v0.8: local model routing.
 - v1.0: spore marketplace와 shared immune memory workflow.

@@ -13,6 +13,10 @@ class NetworkModelProviderDisabled(ModelProviderError):
     """Raised when a network provider is requested without explicit permission."""
 
 
+class ModelBudgetExceeded(ModelProviderError):
+    """Raised before a network call when no external model cost is authorized."""
+
+
 class BaseModelProvider(ABC):
     provider_name = "base"
     requires_network = False
@@ -30,4 +34,3 @@ class BaseModelProvider(ABC):
                 f"Provider '{self.provider_name}' requires network access. "
                 "Set allow_network_for_model_provider = true in .myco/config.toml to enable it."
             )
-

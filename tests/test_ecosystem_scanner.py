@@ -51,5 +51,23 @@ def test_ecosystem_scanner_ignores_build_and_vendor_directories(tmp_path):
     assert ecosystems == []
 
 
+def test_ecosystem_scanner_ignores_manifest_symlinks(tmp_path):
+    outside = tmp_path.parent / "outside_package.json"
+    outside.write_text('{"dependencies": {"next": "latest"}}', encoding="utf-8")
+    (tmp_path / "package.json").symlink_to(outside)
+
+    assert detect_ecosystems(tmp_path) == []
+
+
+def test_nested_manifest_sets_verification_working_directory(tmp_path):
+    service = tmp_path / "services" / "api"
+    service.mkdir(parents=True)
+    (service / "go.mod").write_text("module example/api\n", encoding="utf-8")
+
+    ecosystem = detect_ecosystems(tmp_path)[0]
+
+    assert ecosystem.verification_profiles[0].working_directory == "services/api"
+
+
 def _hint_names(ecosystem):
     return {hint.name for hint in ecosystem.framework_hints}

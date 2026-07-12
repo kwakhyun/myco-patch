@@ -49,14 +49,25 @@ def test_verify_profile_skips_when_tool_missing(tmp_path, monkeypatch):
 
 
 def test_verify_profile_runs_allowed_command_and_sanitizes_output(tmp_path, monkeypatch):
-    profile = VerificationProfile(id="go-test", ecosystem="go", command=["go", "test", "./..."], description="Go tests")
+    workdir = tmp_path / "services" / "billing"
+    workdir.mkdir(parents=True)
+    profile = VerificationProfile(
+        id="go-test",
+        ecosystem="go",
+        command=["go", "test", "./..."],
+        description="Go tests",
+        working_directory="services/billing",
+    )
 
     def fake_which(executable):
         return "/usr/bin/go"
 
-    def fake_run_command(command, cwd, timeout_seconds, allow_project_tests=False):
+    def fake_run_command(command, cwd, timeout_seconds, allow_project_tests=False, environment=None):
         from mycopatch.core.models import CommandResult
 
+        assert cwd == workdir
+        assert environment["MYCOPATCH_OFFLINE"] == "1"
+        assert environment["GOPROXY"] == "off"
         return CommandResult(
             command=command,
             allowed=True,
@@ -76,3 +87,19 @@ def test_verify_profile_runs_allowed_command_and_sanitizes_output(tmp_path, monk
     assert "<repo-root>" in result.stderr
     assert str(tmp_path) not in result.stdout
     assert str(tmp_path) not in result.stderr
+    assert result.working_directory == "services/billing"
+
+
+def test_verify_profile_blocks_working_directory_escape(tmp_path):
+    profile = VerificationProfile(
+        id="go-test",
+        ecosystem="go",
+        command=["go", "test", "./..."],
+        description="Go tests",
+        working_directory="../outside",
+    )
+
+    result = verify_profile(tmp_path, profile, run=True, allow_project_tests=True)
+
+    assert result.status == "blocked"
+    assert "inside the repository" in result.evidence[0]

@@ -1,14 +1,14 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mycopatch"
-version = "0.6.0"
+version = "0.6.1"
 description = "An offline immune system for codebases: scans, probes, verifies, and remembers reproducible risks."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
   { name = "MycoPatch Contributors" }
 ]
@@ -17,7 +17,6 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: JavaScript",
@@ -33,8 +32,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2",
   "pytest>=8.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/kwakhyun/myco-patch"
+Repository = "https://github.com/kwakhyun/myco-patch"
+Issues = "https://github.com/kwakhyun/myco-patch/issues"
 
 [project.scripts]
 myco = "mycopatch.cli:app"
